@@ -1,0 +1,112 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>WorldCup 2026 Prediction Skill</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <main class="shell">
+      <section class="panel control">
+        <div>
+          <p class="eyebrow">WorldCup 2026 Prediction Skill</p>
+          <h1>本地预测控制台</h1>
+        </div>
+
+        <form id="predictForm" class="form">
+          <fieldset class="config-box">
+            <legend>模型配置</legend>
+            <label>
+              接口地址
+              <input id="apiBase" type="url" autocomplete="off" />
+            </label>
+            <label>
+              API Key
+              <input id="apiKey" type="password" autocomplete="off" placeholder="仅在本机请求中使用" />
+            </label>
+            <label>
+              模型名
+              <input id="model" type="text" autocomplete="off" list="modelPresets" />
+              <datalist id="modelPresets">
+                <option value="fable5.0"></option>
+                <option value="gpt-5.5"></option>
+                <option value="gpt-5.4"></option>
+                <option value="gpt-5.4-mini"></option>
+              </datalist>
+            </label>
+            <button id="loadModels" type="button" class="secondary">获取模型列表</button>
+            <select id="modelList" aria-label="模型列表">
+              <option value="">模型列表会显示在这里</option>
+            </select>
+          </fieldset>
+
+          <label>
+            阶段
+            <select id="stage">
+              <option>小组赛</option>
+              <option>32 强</option>
+              <option>16 强</option>
+              <option>8 强</option>
+              <option>半决赛</option>
+              <option>决赛</option>
+            </select>
+          </label>
+          <label>
+            球队 A
+            <select id="teamA"></select>
+          </label>
+          <label>
+            球队 B
+            <select id="teamB"></select>
+          </label>
+          <button type="submit">生成预测</button>
+        </form>
+
+        <p id="status" class="status">服务已启动。API Key 只从本地配置读取。</p>
+      </section>
+
+      <section class="panel result">
+        <div class="scoreline">
+          <div>
+            <span id="teamAName">墨西哥</span>
+            <strong id="teamAProb">--</strong>
+          </div>
+          <div>
+            <span>平局</span>
+            <strong id="drawProb">--</strong>
+          </div>
+          <div>
+            <span id="teamBName">南非</span>
+            <strong id="teamBProb">--</strong>
+          </div>
+        </div>
+        <div class="match-meta">
+          <span>预测比分</span>
+          <b id="predictedScore">--</b>
+          <span>置信度</span>
+          <b id="confidence">--</b>
+        </div>
+        <ul id="factors" class="factors"></ul>
+        <p id="analysis" class="analysis">等待第一次预测。</p>
+        <pre id="rawJson">{}</pre>
+      </section>
+
+      <section class="panel brief">
+        <div class="section-head">
+          <div>
+            <p class="eyebrow">Daily Brief</p>
+            <h2>每日情报更新</h2>
+          </div>
+          <div class="actions">
+            <button id="previewBrief" type="button" class="secondary">获取并整理</button>
+            <button id="writeBrief" type="button">写入第六节</button>
+          </div>
+        </div>
+        <textarea id="briefText" spellcheck="false" placeholder="先点击“获取并整理”，确认内容后再写入 skill.md 第六节。"></textarea>
+        <div id="newsList" class="news-list"></div>
+      </section>
+    </main>
+    <script src="/app.js"></script>
+  </body>
+</html>
