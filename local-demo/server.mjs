@@ -63,8 +63,9 @@ function publicConfig() {
   return {
     model: primaryProvider.model,
     hasApiKey: Boolean(primaryProvider.apiKey),
-    fableFreeUses,
-    fableEnabled: Boolean(fableProvider.apiBase && fableProvider.apiKey),
+    fableFreeUses: 0,
+    fableEnabled: false,
+    providerNotice: "因 fable5 被 ban，当前使用 5.5",
   };
 }
 
@@ -147,13 +148,8 @@ function fableUses(req) {
   return Number.isFinite(value) && value > 0 ? value : 0;
 }
 
-function providerForRequest(req) {
-  const used = fableUses(req);
-  const fableReady = Boolean(fableProvider.apiBase && fableProvider.apiKey && fableFreeUses > 0);
-  if (fableReady && used < fableFreeUses) {
-    return { provider: fableProvider, used, shouldIncrementFable: true };
-  }
-  return { provider: primaryProvider, used, shouldIncrementFable: false };
+function providerForRequest() {
+  return { provider: primaryProvider, used: 0, shouldIncrementFable: false };
 }
 
 function fableCookieHeaders(nextUsed) {
@@ -408,6 +404,6 @@ createServer(async (req, res) => {
   console.log(`WorldCup local demo: http://${host}:${port}`);
   console.log(`Primary model endpoint: ${primaryProvider.apiBase} / ${primaryProvider.model}`);
   if (fableProvider.apiBase && fableProvider.apiKey) {
-    console.log(`Fable model endpoint: ${fableProvider.apiBase} / ${fableProvider.model} (${fableFreeUses} free uses per browser)`);
+    console.log(`Fable model endpoint is configured but disabled; using primary model only.`);
   }
 });

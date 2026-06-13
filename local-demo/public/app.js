@@ -201,9 +201,7 @@ async function loadConfig() {
   const config = await res.json();
   activeModelLabel.textContent = config.hasApiKey ? "预测服务已就绪" : "预测服务未配置";
   activeBaseLabel.textContent = config.hasApiKey
-    ? config.fableEnabled
-      ? `首次 ${config.fableFreeUses} 次优先试用 fable，之后切换主模型：${config.model}`
-      : `当前模型：${config.model}`
+    ? config.providerNotice || "因 fable5 被 ban，当前使用 5.5"
     : "请在服务器环境变量中配置 OPENAI_API_KEY";
 }
 

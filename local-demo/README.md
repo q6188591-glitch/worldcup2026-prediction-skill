@@ -29,7 +29,7 @@ OPENAI_BASE_URL
 OPENAI_MODEL
 ```
 
-Optional two-provider mode:
+Retained fable provider settings:
 
 ```text
 FABLE_OPENAI_API_KEY
@@ -38,7 +38,7 @@ FABLE_OPENAI_MODEL=anthropic/claude-fable-5
 FABLE_FREE_USES=2
 ```
 
-When fable is configured, each browser gets `FABLE_FREE_USES` fable prediction attempts via a cookie. Later predictions use the primary `OPENAI_*` provider. If fable fails, the server falls back to the primary provider and still counts that fable attempt so users are not repeatedly delayed by a failing trial provider.
+Fable settings can stay in the private environment file for later use, but the current runtime disables fable and sends every public prediction through the primary `OPENAI_*` provider because fable5 is banned.
 
 Optional:
 
