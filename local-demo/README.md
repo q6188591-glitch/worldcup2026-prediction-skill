@@ -45,9 +45,15 @@ Optional:
 ```text
 PORT=5176
 ADMIN_TOKEN=change-this-if-you-want-admin-brief-apis
+LIVE_NEWS_RSS_URL=https://www.espn.com/espn/rss/soccer/news
+LIVE_REFRESH_MS=600000
 ```
 
 The public frontend never receives the API key, base URL, or model list. Prediction calls use the server-side environment configuration.
+
+## Live prediction updates
+
+The demo now keeps a server-side live news context. The server refreshes `LIVE_NEWS_RSS_URL` every `LIVE_REFRESH_MS` milliseconds, pushes update events to the browser, and injects the latest brief into every `/api/predict` call. On the page, the "实时情报" bar shows refresh status, supports manual refresh, and can automatically recalculate the current matchup after new context arrives.
 
 `local-demo/.env.example` includes the current primary provider, the fable provider, and retained otokapi backup placeholders. Copy it to `.env.local` on a private machine or server, then replace placeholder keys there. `.env.local` is ignored by Git.
 

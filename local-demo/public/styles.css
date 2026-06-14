@@ -189,6 +189,45 @@ h1 {
   overflow-wrap: anywhere;
 }
 
+.live-panel {
+  display: grid;
+  grid-template-columns: 1fr max-content max-content;
+  gap: 14px;
+  align-items: center;
+  margin-bottom: 18px;
+  padding: 14px 16px;
+  border-radius: 8px;
+  border: 1px solid rgba(222, 232, 225, 0.9);
+  background: rgba(255, 255, 255, 0.94);
+  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.18);
+  animation: fadeUp 700ms ease both;
+}
+
+.live-panel span {
+  display: block;
+  font-weight: 900;
+}
+
+.live-panel small {
+  display: block;
+  margin-top: 3px;
+  color: #66746b;
+  overflow-wrap: anywhere;
+}
+
+.live-toggle {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin: 0;
+  white-space: nowrap;
+}
+
+.live-toggle input {
+  width: 18px;
+  min-height: 18px;
+}
+
 .panel {
   border-radius: 8px;
   border: 1px solid rgba(222, 232, 225, 0.9);
@@ -348,6 +387,111 @@ button.secondary:hover {
 .predict-form {
   display: grid;
   gap: 14px;
+}
+
+.batch-controls {
+  display: grid;
+  grid-template-columns: 1fr max-content;
+  gap: 12px;
+  align-items: end;
+}
+
+.batch-status {
+  margin-top: 12px;
+  color: #53625a;
+  font-weight: 800;
+}
+
+.batch-results {
+  display: grid;
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.batch-row {
+  display: grid;
+  grid-template-columns: 1fr 140px 92px 110px;
+  gap: 10px;
+  align-items: center;
+  min-height: 52px;
+  padding: 10px 12px;
+  border: 1px solid #dce8e0;
+  border-radius: 8px;
+  background: #f7fbf8;
+}
+
+.batch-row em {
+  color: #157044;
+  font-style: normal;
+  margin: 0 4px;
+}
+
+.batch-row span,
+.batch-row small {
+  color: #66746b;
+}
+
+.batch-row b {
+  color: #12693e;
+}
+
+.batch-row.is-running {
+  border-color: #ffc947;
+  background: #fff9e8;
+}
+
+.batch-row.is-error {
+  border-color: #d46969;
+  background: #fff1f1;
+}
+
+.memory-controls {
+  display: grid;
+  grid-template-columns: 1fr max-content;
+  gap: 12px;
+  align-items: end;
+}
+
+.memory-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  margin-top: 12px;
+}
+
+.memory-card {
+  display: grid;
+  gap: 10px;
+  padding: 14px;
+  border: 1px solid #dce8e0;
+  border-radius: 8px;
+  background: #f7fbf8;
+}
+
+.memory-card header {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.memory-card header span,
+.memory-card p,
+.memory-card li {
+  color: #53625a;
+}
+
+.memory-card p {
+  margin: 0;
+  line-height: 1.6;
+}
+
+.memory-card ul {
+  margin: 0;
+  padding-left: 18px;
+}
+
+.memory-card b {
+  color: #145a36;
 }
 
 .progress {
@@ -660,14 +804,23 @@ pre {
 
   .match-rail,
   .versus-grid,
+  .batch-controls,
+  .batch-row,
+  .memory-controls,
+  .memory-grid,
   .prob-grid,
   .result-meta,
   .players,
   .schedule-row,
   .record-stats,
   .record-row,
+  .live-panel,
   .toolbar {
     grid-template-columns: 1fr;
     display: grid;
+  }
+
+  .live-toggle {
+    white-space: normal;
   }
 }

@@ -37,6 +37,18 @@
         </div>
       </div>
 
+      <section class="live-panel">
+        <div>
+          <span id="liveStatus">实时情报连接中</span>
+          <small id="liveMeta">预测会自动带入最新新闻上下文</small>
+        </div>
+        <label class="live-toggle">
+          <input id="autoRePredict" type="checkbox" checked />
+          情报更新后自动重算当前对阵
+        </label>
+        <button id="refreshLive" class="secondary" type="button">刷新情报</button>
+      </section>
+
       <section class="layout">
 
         <section class="panel focus">
@@ -82,9 +94,25 @@
           </form>
         </section>
 
-        <section class="panel result">
+        <section class="panel batch-panel">
           <div class="section-title">
             <span>03</span>
+            <h2>一键批量预测</h2>
+          </div>
+          <div class="batch-controls">
+            <label>
+              比赛日期
+              <select id="batchDate"></select>
+            </label>
+            <button id="batchPredict" type="button">一键预测当天全部</button>
+          </div>
+          <div id="batchStatus" class="batch-status">选择日期后开始批量预测，结果会自动保存到命中记录。</div>
+          <div id="batchResults" class="batch-results"></div>
+        </section>
+
+        <section class="panel result">
+          <div class="section-title">
+            <span>04</span>
             <h2>预测结果</h2>
           </div>
           <div class="prob-grid">
@@ -118,7 +146,7 @@
 
         <section class="panel schedule">
           <div class="section-title">
-            <span>04</span>
+            <span>05</span>
             <h2>赛程模板</h2>
           </div>
           <div id="scheduleGrid" class="schedule-grid"></div>
@@ -126,16 +154,32 @@
 
         <section class="panel accuracy-board">
           <div class="section-title">
-            <span>05</span>
+            <span>06</span>
             <h2>命中记录</h2>
           </div>
           <div id="recordStats" class="record-stats"></div>
           <div id="recordList" class="record-list"></div>
         </section>
 
+        <section class="panel memory-panel">
+          <div class="section-title">
+            <span>07</span>
+            <h2>小组赛复盘记忆</h2>
+          </div>
+          <div class="memory-controls">
+            <label>
+              采集范围
+              <select id="memoryTeam"></select>
+            </label>
+            <button id="refreshMemory" type="button">采集复盘记忆</button>
+          </div>
+          <div id="memoryStatus" class="batch-status">收录后会自动作为后续预测材料。</div>
+          <div id="memoryGrid" class="memory-grid"></div>
+        </section>
+
         <section class="panel disclaimer">
           <div class="section-title">
-            <span>06</span>
+            <span>08</span>
             <h2>使用边界</h2>
           </div>
           <p>本模板面向赛前讨论、球迷社区和内容创作。预测结果来自模型推演和公开资料整理，不代表真实赛果保证，不应用于任何投注、赔率、付费推荐或违法场景。</p>
