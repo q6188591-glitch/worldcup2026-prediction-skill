@@ -186,6 +186,10 @@ function reverseScore(score) {
   return a !== undefined && b !== undefined ? `${b}-${a}` : score;
 }
 
+function unorderedMatchKey(teamA, teamB) {
+  return [teamA, teamB].sort((a, b) => a.localeCompare(b, "zh-CN")).join("|");
+}
+
 async function readSavedPredictions() {
   try {
     const text = await readFile(predictionsPath, "utf8");
@@ -507,6 +511,7 @@ const predictionRecords = new Map([
   ["Qatar|Switzerland", { group: "B组", predicted: "0-2" }],
   ["Brazil|Morocco", { group: "C组", predicted: "2-1" }],
   ["Haiti|Scotland", { group: "C组", predicted: "0-2" }],
+  ["Australia|Turkey", { group: "D组", predicted: null }],
 ]);
 
 const fallbackRecords = [
@@ -581,6 +586,41 @@ async function fetchCompletedScoreboardRecords(savedPredictions = new Map()) {
   return records;
 }
 
+function applySavedPrediction(record, savedPredictions) {
+  const direct = savedPredictions.get(predictionKey(record.teamA, record.teamB));
+  const reverse = savedPredictions.get(predictionKey(record.teamB, record.teamA));
+  if (direct) {
+    return {
+      ...record,
+      predicted: direct.predicted,
+      group: direct.group || record.group,
+      note: "",
+    };
+  }
+  if (reverse) {
+    return {
+      ...record,
+      predicted: reverseScore(reverse.predicted),
+      group: reverse.group || record.group,
+      note: "",
+    };
+  }
+  return record;
+}
+
+function mergeCompletedRecords(primaryRecords, localRecords, savedPredictions = new Map()) {
+  const merged = new Map();
+  for (const record of localRecords) {
+    const withPrediction = applySavedPrediction(record, savedPredictions);
+    merged.set(unorderedMatchKey(withPrediction.teamA, withPrediction.teamB), withPrediction);
+  }
+  for (const record of primaryRecords) {
+    const withPrediction = applySavedPrediction(record, savedPredictions);
+    merged.set(unorderedMatchKey(withPrediction.teamA, withPrediction.teamB), withPrediction);
+  }
+  return [...merged.values()];
+}
+
 function summarizeRecords(records, sourceError = "") {
   const normalized = records.map((item) => ({
     ...item,
@@ -605,12 +645,13 @@ function summarizeRecords(records, sourceError = "") {
 }
 
 async function buildRecords() {
+  let savedPredictions = new Map();
   try {
-    const savedPredictions = await readSavedPredictions();
+    savedPredictions = await readSavedPredictions();
     const records = await fetchCompletedScoreboardRecords(savedPredictions);
-    return summarizeRecords(records.length ? records : fallbackRecords);
+    return summarizeRecords(mergeCompletedRecords(records, fallbackRecords, savedPredictions));
   } catch (error) {
-    return summarizeRecords(fallbackRecords, error.message);
+    return summarizeRecords(mergeCompletedRecords([], fallbackRecords, savedPredictions), error.message);
   }
 }
 
