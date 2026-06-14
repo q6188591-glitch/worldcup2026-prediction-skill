@@ -310,7 +310,13 @@ async function refreshMemory() {
       headers: { "content-type": "application/json" },
       body: JSON.stringify(body),
     });
-    const data = await res.json();
+    const text = await res.text();
+    let data;
+    try {
+      data = JSON.parse(text);
+    } catch {
+      throw new Error("复盘服务返回异常，请稍后重试或改为采集单支球队。");
+    }
     if (!res.ok) throw new Error(data.error || "复盘记忆采集失败");
     renderMemory(data);
   } catch (error) {

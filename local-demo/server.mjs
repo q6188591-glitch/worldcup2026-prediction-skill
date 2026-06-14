@@ -240,6 +240,14 @@ async function fetchReviewItems() {
   return groups.flatMap((result) => (result.status === "fulfilled" ? result.value : []));
 }
 
+function withTimeout(promise, ms, message) {
+  let timeoutId;
+  const timeout = new Promise((_, reject) => {
+    timeoutId = setTimeout(() => reject(new Error(message)), ms);
+  });
+  return Promise.race([promise, timeout]).finally(() => clearTimeout(timeoutId));
+}
+
 async function savePredictionSnapshot(payload, result) {
   if (!result?.predictedScore || !payload.teamA || !payload.teamB) return;
   const saved = await readSavedPredictions();
@@ -689,22 +697,26 @@ async function buildTeamReview(team, matches, articles) {
   const matchText = matches.map((item) => `${item.group} ${item.teamA} vs ${item.teamB} actual=${item.actual} predicted=${item.predicted || "未记录"}`).join("\n");
   const newsText = articles.map((item, index) => `${index + 1}. ${item.title} | ${item.source} | ${item.pubDate}`).join("\n");
   try {
-    const content = await callChat({
-      apiBase: primaryProvider.apiBase,
-      apiKey: primaryProvider.apiKey,
-      model: primaryProvider.model,
-      responseFormat: { type: "json_object" },
-      messages: [
-        {
-          role: "system",
-          content: "你是世界杯小组赛复盘分析员。只根据给定赛果和新闻标题做结构化总结，不编造伤停、战术或内部消息。输出严格 JSON：team, summary, insights(string[]), risks(string[]), sources(object[])。",
-        },
-        {
-          role: "user",
-          content: `球队：${team}\n\n已完赛样本：\n${matchText || "暂无"}\n\n相关新闻标题：\n${newsText || "暂无"}\n\n请生成可供后续预测复用的小组赛复盘记忆。`,
-        },
-      ],
-    });
+    const content = await withTimeout(
+      callChat({
+        apiBase: primaryProvider.apiBase,
+        apiKey: primaryProvider.apiKey,
+        model: primaryProvider.model,
+        responseFormat: { type: "json_object" },
+        messages: [
+          {
+            role: "system",
+            content: "你是世界杯小组赛复盘分析员。只根据给定赛果和新闻标题做结构化总结，不编造伤停、战术或内部消息。输出严格 JSON：team, summary, insights(string[]), risks(string[]), sources(object[])。",
+          },
+          {
+            role: "user",
+            content: `球队：${team}\n\n已完赛样本：\n${matchText || "暂无"}\n\n相关新闻标题：\n${newsText || "暂无"}\n\n请生成可供后续预测复用的小组赛复盘记忆。`,
+          },
+        ],
+      }),
+      12_000,
+      "Review model timeout",
+    );
     const parsed = JSON.parse(content);
     return {
       team,
@@ -725,25 +737,40 @@ async function memory(req, res) {
 async function refreshMemory(req, res) {
   const payload = await readJson(req);
   const recordsData = await buildRecords();
-  const reviewItems = await fetchReviewItems();
-  const teams = payload.team
+  let reviewItems = [];
+  try {
+    reviewItems = await withTimeout(fetchReviewItems(), 8_000, "Review sources timeout");
+  } catch {
+    reviewItems = [];
+  }
+  const teams = (payload.team
     ? [payload.team]
-    : [...new Set(recordsData.records.flatMap((item) => [item.teamA, item.teamB]))];
+    : [...new Set(recordsData.records.flatMap((item) => [item.teamA, item.teamB]))]).slice(0, 4);
   const memory = await readTeamMemory();
   memory.teams ||= {};
   memory.updatedAtIso = new Date().toISOString();
   memory.sources = reviewSourceUrls;
+  memory.lastBatch = { teams, limit: 4, updatedAtIso: memory.updatedAtIso };
 
   for (const team of teams) {
     const matches = recordsData.records.filter((item) => item.teamA === team || item.teamB === team);
     const articles = teamArticles(team, reviewItems);
-    const review = await buildTeamReview(team, matches, articles);
-    memory.teams[team] = {
-      ...review,
-      matchCount: matches.length,
-      sourceCount: articles.length,
-      updatedAtIso: new Date().toISOString(),
-    };
+    try {
+      const review = await buildTeamReview(team, matches, articles);
+      memory.teams[team] = {
+        ...review,
+        matchCount: matches.length,
+        sourceCount: articles.length,
+        updatedAtIso: new Date().toISOString(),
+      };
+    } catch {
+      memory.teams[team] = {
+        ...fallbackTeamReview(team, matches, articles),
+        matchCount: matches.length,
+        sourceCount: articles.length,
+        updatedAtIso: new Date().toISOString(),
+      };
+    }
   }
 
   await writeTeamMemory(memory);
