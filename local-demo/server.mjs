@@ -371,23 +371,24 @@ async function serveStatic(req, res) {
 
 createServer(async (req, res) => {
   try {
-    if (req.method === "GET" && req.url === "/api/config") {
+    const route = new URL(req.url, `http://${req.headers.host}`).pathname;
+    if (req.method === "GET" && route === "/api/config") {
       sendJson(res, 200, publicConfig());
       return;
     }
-    if (req.method === "POST" && req.url === "/api/models") {
+    if (req.method === "POST" && route === "/api/models") {
       await listModels(req, res);
       return;
     }
-    if (req.method === "POST" && req.url === "/api/predict") {
+    if (req.method === "POST" && route === "/api/predict") {
       await predict(req, res);
       return;
     }
-    if (req.method === "POST" && req.url === "/api/brief/preview") {
+    if (req.method === "POST" && route === "/api/brief/preview") {
       await previewBrief(req, res);
       return;
     }
-    if (req.method === "POST" && req.url === "/api/brief/write") {
+    if (req.method === "POST" && route === "/api/brief/write") {
       await writeBrief(req, res);
       return;
     }
