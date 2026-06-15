@@ -509,6 +509,17 @@ const teamNameZh = new Map([
   ["Australia", "澳大利亚"],
   ["Türkiye", "土耳其"],
   ["Turkey", "土耳其"],
+  ["Germany", "德国"],
+  ["Curaçao", "库拉索"],
+  ["Curacao", "库拉索"],
+  ["Netherlands", "荷兰"],
+  ["Japan", "日本"],
+  ["Ivory Coast", "科特迪瓦"],
+  ["Côte d'Ivoire", "科特迪瓦"],
+  ["Cote d'Ivoire", "科特迪瓦"],
+  ["Ecuador", "厄瓜多尔"],
+  ["Sweden", "瑞典"],
+  ["Tunisia", "突尼斯"],
 ]);
 
 const predictionRecords = new Map([
@@ -520,6 +531,11 @@ const predictionRecords = new Map([
   ["Brazil|Morocco", { group: "C组", predicted: "2-1" }],
   ["Haiti|Scotland", { group: "C组", predicted: "0-2" }],
   ["Australia|Turkey", { group: "D组", predicted: null }],
+  ["Germany|Curaçao", { group: "E组", predicted: null }],
+  ["Germany|Curacao", { group: "E组", predicted: null }],
+  ["Netherlands|Japan", { group: "F组", predicted: null }],
+  ["Ivory Coast|Ecuador", { group: "E组", predicted: null }],
+  ["Sweden|Tunisia", { group: "F组", predicted: null }],
 ]);
 
 const fallbackRecords = [
