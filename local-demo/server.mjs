@@ -520,6 +520,23 @@ const teamNameZh = new Map([
   ["Ecuador", "厄瓜多尔"],
   ["Sweden", "瑞典"],
   ["Tunisia", "突尼斯"],
+  ["Belgium", "比利时"],
+  ["Egypt", "埃及"],
+  ["Iran", "伊朗"],
+  ["New Zealand", "新西兰"],
+  ["Spain", "西班牙"],
+  ["Cape Verde", "佛得角"],
+  ["Cape Verde Islands", "佛得角"],
+  ["Saudi Arabia", "沙特"],
+  ["Uruguay", "乌拉圭"],
+  ["France", "法国"],
+  ["Senegal", "塞内加尔"],
+  ["Iraq", "伊拉克"],
+  ["Norway", "挪威"],
+  ["Argentina", "阿根廷"],
+  ["Algeria", "阿尔及利亚"],
+  ["Austria", "奥地利"],
+  ["Jordan", "约旦"],
 ]);
 
 const predictionRecords = new Map([
@@ -536,6 +553,15 @@ const predictionRecords = new Map([
   ["Netherlands|Japan", { group: "F组", predicted: null }],
   ["Ivory Coast|Ecuador", { group: "E组", predicted: null }],
   ["Sweden|Tunisia", { group: "F组", predicted: null }],
+  ["Belgium|Egypt", { group: "G组", predicted: null }],
+  ["Iran|New Zealand", { group: "H组", predicted: null }],
+  ["Spain|Cape Verde", { group: "G组", predicted: null }],
+  ["Spain|Cape Verde Islands", { group: "G组", predicted: null }],
+  ["Saudi Arabia|Uruguay", { group: "H组", predicted: null }],
+  ["France|Senegal", { group: "I组", predicted: null }],
+  ["Iraq|Norway", { group: "J组", predicted: null }],
+  ["Argentina|Algeria", { group: "I组", predicted: null }],
+  ["Austria|Jordan", { group: "J组", predicted: null }],
 ]);
 
 const fallbackRecords = [

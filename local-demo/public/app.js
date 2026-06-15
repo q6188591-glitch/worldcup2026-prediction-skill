@@ -22,10 +22,18 @@ const schedule = [
   { group: "C组", date: "6/14 06:00", label: "已赛 · 北京时间", teamA: "巴西", teamB: "摩洛哥", status: "FT", score: "1-1" },
   { group: "C组", date: "6/14 09:00", label: "已赛 · 北京时间", teamA: "海地", teamB: "苏格兰", status: "FT", score: "0-1" },
   { group: "D组", date: "6/14 12:00", label: "已赛 · 北京时间", teamA: "澳大利亚", teamB: "土耳其", status: "FT", score: "2-0" },
-  { group: "E组", date: "6/15 01:00", label: "小组赛 · 北京时间", teamA: "德国", teamB: "库拉索" },
-  { group: "F组", date: "6/15 04:00", label: "小组赛 · 北京时间", teamA: "荷兰", teamB: "日本" },
-  { group: "E组", date: "6/15 07:00", label: "小组赛 · 北京时间", teamA: "科特迪瓦", teamB: "厄瓜多尔" },
-  { group: "F组", date: "6/15 10:00", label: "小组赛 · 北京时间", teamA: "瑞典", teamB: "突尼斯" },
+  { group: "E组", date: "6/15 01:00", label: "已赛 · 北京时间", teamA: "德国", teamB: "库拉索", status: "FT", score: "7-1" },
+  { group: "F组", date: "6/15 04:00", label: "已赛 · 北京时间", teamA: "荷兰", teamB: "日本", status: "FT", score: "2-2" },
+  { group: "E组", date: "6/15 07:00", label: "已赛 · 北京时间", teamA: "科特迪瓦", teamB: "厄瓜多尔", status: "FT", score: "1-0" },
+  { group: "F组", date: "6/15 10:00", label: "已赛 · 北京时间", teamA: "瑞典", teamB: "突尼斯", status: "FT" },
+  { group: "G组", date: "6/16 01:00", label: "小组赛 · 北京时间", teamA: "比利时", teamB: "埃及" },
+  { group: "H组", date: "6/16 04:00", label: "小组赛 · 北京时间", teamA: "伊朗", teamB: "新西兰" },
+  { group: "G组", date: "6/16 07:00", label: "小组赛 · 北京时间", teamA: "西班牙", teamB: "佛得角" },
+  { group: "H组", date: "6/16 10:00", label: "小组赛 · 北京时间", teamA: "沙特", teamB: "乌拉圭" },
+  { group: "I组", date: "6/17 01:00", label: "小组赛 · 北京时间", teamA: "法国", teamB: "塞内加尔" },
+  { group: "J组", date: "6/17 04:00", label: "小组赛 · 北京时间", teamA: "伊拉克", teamB: "挪威" },
+  { group: "I组", date: "6/17 07:00", label: "小组赛 · 北京时间", teamA: "阿根廷", teamB: "阿尔及利亚" },
+  { group: "J组", date: "6/17 10:00", label: "小组赛 · 北京时间", teamA: "奥地利", teamB: "约旦" },
 ];
 
 const teamMeta = new Map(teams);
@@ -76,18 +84,36 @@ function matchDay(dateText) {
   return String(dateText || "").split(" ")[0];
 }
 
+function matchStartAt(match) {
+  const matchText = String(match.date || "").match(/^(\d{1,2})\/(\d{1,2})\s+(\d{1,2}):(\d{2})$/);
+  if (!matchText) return null;
+  const [, month, day, hour, minute] = matchText.map(Number);
+  return new Date(2026, month - 1, day, hour, minute);
+}
+
+function isPredictableMatch(match) {
+  if (match.status === "FT") return false;
+  const startAt = matchStartAt(match);
+  return !startAt || startAt > new Date();
+}
+
 function stageForMatch(match) {
   return match.label?.split("·")[0]?.trim() || "小组赛";
 }
 
 function addBatchDateOptions() {
-  const days = [...new Set(schedule.filter((match) => match.status !== "FT").map((match) => matchDay(match.date)))];
+  const availableMatches = schedule.filter(isPredictableMatch);
+  const days = [...new Set(availableMatches.map((match) => matchDay(match.date)))];
   batchDateSelect.innerHTML = "";
   for (const day of days) {
-    const count = schedule.filter((match) => match.status !== "FT" && matchDay(match.date) === day).length;
+    const count = availableMatches.filter((match) => matchDay(match.date) === day).length;
     batchDateSelect.add(new Option(`${day} · ${count} 场`, day));
   }
-  if (days.includes("6/15")) batchDateSelect.value = "6/15";
+  batchDateSelect.disabled = !days.length;
+  batchPredictButton.disabled = !days.length;
+  batchStatus.textContent = days.length
+    ? "选择日期后开始批量预测，结果会自动保存到命中记录。"
+    : "当前赛程里没有可批量预测的未来比赛。";
 }
 
 function addMemoryTeamOptions() {
@@ -118,7 +144,7 @@ function selectMatch(match) {
 
 function renderSchedule() {
   matchRail.innerHTML = "";
-  const upcoming = schedule.filter((match) => match.status !== "FT").slice(0, 4);
+  const upcoming = schedule.filter(isPredictableMatch).slice(0, 4);
   upcoming.forEach((match, index) => {
     const button = document.createElement("button");
     button.type = "button";
@@ -389,7 +415,7 @@ function renderBatchRow(match, state, dataOrMessage = "") {
 async function runBatchPrediction() {
   if (isBatchPredicting) return;
   const day = batchDateSelect.value;
-  const matches = schedule.filter((match) => match.status !== "FT" && matchDay(match.date) === day);
+  const matches = schedule.filter((match) => isPredictableMatch(match) && matchDay(match.date) === day);
   if (!matches.length) {
     batchStatus.textContent = "这个日期没有可批量预测的比赛。";
     return;
