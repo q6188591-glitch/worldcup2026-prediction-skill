@@ -537,6 +537,15 @@ const teamNameZh = new Map([
   ["Algeria", "阿尔及利亚"],
   ["Austria", "奥地利"],
   ["Jordan", "约旦"],
+  ["Portugal", "葡萄牙"],
+  ["Congo DR", "刚果金"],
+  ["DR Congo", "刚果金"],
+  ["Uzbekistan", "乌兹别克斯坦"],
+  ["Colombia", "哥伦比亚"],
+  ["England", "英格兰"],
+  ["Croatia", "克罗地亚"],
+  ["Ghana", "加纳"],
+  ["Panama", "巴拿马"],
 ]);
 
 const predictionRecords = new Map([
@@ -562,6 +571,11 @@ const predictionRecords = new Map([
   ["Iraq|Norway", { group: "J组", predicted: null }],
   ["Argentina|Algeria", { group: "I组", predicted: null }],
   ["Austria|Jordan", { group: "J组", predicted: null }],
+  ["Portugal|Congo DR", { group: "K组", predicted: null }],
+  ["Portugal|DR Congo", { group: "K组", predicted: null }],
+  ["Uzbekistan|Colombia", { group: "K组", predicted: null }],
+  ["England|Croatia", { group: "L组", predicted: null }],
+  ["Ghana|Panama", { group: "L组", predicted: null }],
 ]);
 
 const fallbackRecords = [
@@ -579,6 +593,12 @@ function dateKey(date) {
   return date.toISOString().slice(0, 10).replace(/-/g, "");
 }
 
+function dateKeyFromOffset(offsetDays) {
+  const date = new Date();
+  date.setUTCDate(date.getUTCDate() + offsetDays);
+  return dateKey(date);
+}
+
 function scoreboardDates() {
   const dates = [];
   const current = new Date("2026-06-11T00:00:00Z");
@@ -591,6 +611,62 @@ function scoreboardDates() {
   return dates;
 }
 
+function upcomingScoreboardDates(days = 14) {
+  return Array.from({ length: days }, (_, index) => dateKeyFromOffset(index));
+}
+
+function beijingDateLabel(value) {
+  const parts = new Intl.DateTimeFormat("zh-CN", {
+    timeZone: "Asia/Shanghai",
+    month: "numeric",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  }).formatToParts(new Date(value));
+  const pick = (type) => parts.find((part) => part.type === type)?.value || "";
+  return `${Number(pick("month"))}/${Number(pick("day"))} ${pick("hour")}:${pick("minute")}`;
+}
+
+function normalizeScoreboardEvent(event, savedPredictions = new Map()) {
+  const competition = event.competitions?.[0];
+  if (!competition) return null;
+  const home = competition.competitors?.find((item) => item.homeAway === "home");
+  const away = competition.competitors?.find((item) => item.homeAway === "away");
+  if (!home || !away) return null;
+  const homeName = home.team?.displayName || "";
+  const awayName = away.team?.displayName || "";
+  const defaultPrediction = predictionRecords.get(`${homeName}|${awayName}`) || predictionRecords.get(`${awayName}|${homeName}`) || {};
+  const isDefaultReversed = predictionRecords.has(`${awayName}|${homeName}`);
+  const homeZh = teamNameZh.get(homeName) || homeName;
+  const awayZh = teamNameZh.get(awayName) || awayName;
+  const savedDirect = savedPredictions.get(predictionKey(homeZh, awayZh));
+  const savedReverse = savedPredictions.get(predictionKey(awayZh, homeZh));
+  const savedPrediction = savedDirect || savedReverse;
+  const isSavedReversed = Boolean(savedReverse);
+  const isReversed = savedPrediction ? isSavedReversed : isDefaultReversed;
+  const teamA = isReversed ? awayZh : homeZh;
+  const teamB = isReversed ? homeZh : awayZh;
+  const predicted = savedPrediction
+    ? isSavedReversed ? reverseScore(savedPrediction.predicted) : savedPrediction.predicted
+    : defaultPrediction.predicted || null;
+  const actual = event.status?.type?.completed
+    ? isReversed ? `${away.score}-${home.score}` : `${home.score}-${away.score}`
+    : "";
+  return {
+    eventId: event.id,
+    group: savedPrediction?.group || defaultPrediction.group || "赛程",
+    date: beijingDateLabel(event.date),
+    label: `${event.status?.type?.completed ? "已赛" : "小组赛"} · 北京时间`,
+    teamA,
+    teamB,
+    predicted,
+    actual,
+    status: event.status?.type?.completed ? "FT" : event.status?.type?.state || "",
+    source: "ESPN scoreboard",
+  };
+}
+
 async function fetchCompletedScoreboardRecords(savedPredictions = new Map()) {
   const records = [];
   for (const date of scoreboardDates()) {
@@ -600,40 +676,61 @@ async function fetchCompletedScoreboardRecords(savedPredictions = new Map()) {
     if (!response.ok) continue;
     const data = await response.json();
     for (const event of data.events || []) {
-      const competition = event.competitions?.[0];
-      if (!event.status?.type?.completed || !competition) continue;
-      const home = competition.competitors?.find((item) => item.homeAway === "home");
-      const away = competition.competitors?.find((item) => item.homeAway === "away");
-      if (!home || !away) continue;
-      const homeName = home.team?.displayName || "";
-      const awayName = away.team?.displayName || "";
-      const defaultPrediction = predictionRecords.get(`${homeName}|${awayName}`) || predictionRecords.get(`${awayName}|${homeName}`) || {};
-      const isDefaultReversed = predictionRecords.has(`${awayName}|${homeName}`);
-      const homeZh = teamNameZh.get(homeName) || homeName;
-      const awayZh = teamNameZh.get(awayName) || awayName;
-      const savedDirect = savedPredictions.get(predictionKey(homeZh, awayZh));
-      const savedReverse = savedPredictions.get(predictionKey(awayZh, homeZh));
-      const savedPrediction = savedDirect || savedReverse;
-      const isSavedReversed = Boolean(savedReverse);
-      const predicted = savedPrediction
-        ? isSavedReversed ? reverseScore(savedPrediction.predicted) : savedPrediction.predicted
-        : defaultPrediction.predicted || null;
-      const group = savedPrediction?.group || defaultPrediction.group || "赛果";
-      const isReversed = savedPrediction ? isSavedReversed : isDefaultReversed;
-      const actual = isReversed ? `${away.score}-${home.score}` : `${home.score}-${away.score}`;
+      if (!event.status?.type?.completed) continue;
+      const normalized = normalizeScoreboardEvent(event, savedPredictions);
+      if (!normalized) continue;
       records.push({
-        group,
-        teamA: isReversed ? awayZh : homeZh,
-        teamB: isReversed ? homeZh : awayZh,
-        predicted,
-        actual,
-        source: "ESPN scoreboard",
-        eventId: event.id,
-        note: predicted ? "" : "未找到赛前预测",
+        group: normalized.group === "赛程" ? "赛果" : normalized.group,
+        teamA: normalized.teamA,
+        teamB: normalized.teamB,
+        predicted: normalized.predicted,
+        actual: normalized.actual,
+        source: normalized.source,
+        eventId: normalized.eventId,
+        note: normalized.predicted ? "" : "未找到赛前预测",
       });
     }
   }
   return records;
+}
+
+async function fetchUpcomingSchedule() {
+  const savedPredictions = await readSavedPredictions();
+  const matches = [];
+  const seen = new Set();
+  for (const date of upcomingScoreboardDates(14)) {
+    const response = await fetch(`${scoreboardBaseUrl}?dates=${date}`, {
+      headers: { "user-agent": "worldcup-local-demo/1.0" },
+    });
+    if (!response.ok) continue;
+    const data = await response.json();
+    for (const event of data.events || []) {
+      const normalized = normalizeScoreboardEvent(event, savedPredictions);
+      if (!normalized || normalized.status === "FT") continue;
+      if (seen.has(normalized.eventId)) continue;
+      seen.add(normalized.eventId);
+      matches.push(normalized);
+    }
+  }
+  return matches;
+}
+
+async function schedule(req, res) {
+  try {
+    const matches = await withTimeout(fetchUpcomingSchedule(), 10_000, "Schedule source timeout");
+    sendJson(res, 200, {
+      updatedAtIso: new Date().toISOString(),
+      source: "ESPN scoreboard",
+      matches,
+    });
+  } catch (error) {
+    sendJson(res, 200, {
+      updatedAtIso: new Date().toISOString(),
+      source: "local fallback",
+      sourceError: error.message,
+      matches: [],
+    });
+  }
 }
 
 function applySavedPrediction(record, savedPredictions) {
@@ -942,6 +1039,10 @@ createServer(async (req, res) => {
     }
     if (req.method === "GET" && route === "/api/records") {
       await records(req, res);
+      return;
+    }
+    if (req.method === "GET" && route === "/api/schedule") {
+      await schedule(req, res);
       return;
     }
     if (req.method === "GET" && route === "/api/memory") {

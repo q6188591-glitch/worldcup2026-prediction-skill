@@ -13,7 +13,7 @@ const teams = [
   ["英格兰", "🏴"], ["克罗地亚", "🇭🇷"], ["加纳", "🇬🇭"], ["巴拿马", "🇵🇦"],
 ];
 
-const schedule = [
+const fallbackSchedule = [
   { group: "A组", date: "6/12 03:00", label: "已赛 · 北京时间", teamA: "墨西哥", teamB: "南非", status: "FT", score: "2-0" },
   { group: "A组", date: "6/12 10:00", label: "已赛 · 北京时间", teamA: "韩国", teamB: "捷克", status: "FT", score: "2-1" },
   { group: "B组", date: "6/13 03:00", label: "已赛 · 北京时间", teamA: "加拿大", teamB: "波黑", status: "FT", score: "1-1" },
@@ -35,6 +35,7 @@ const schedule = [
   { group: "I组", date: "6/17 07:00", label: "小组赛 · 北京时间", teamA: "阿根廷", teamB: "阿尔及利亚" },
   { group: "J组", date: "6/17 10:00", label: "小组赛 · 北京时间", teamA: "奥地利", teamB: "约旦" },
 ];
+let schedule = [...fallbackSchedule];
 
 const teamMeta = new Map(teams);
 const form = document.querySelector("#predictForm");
@@ -114,6 +115,30 @@ function addBatchDateOptions() {
   batchStatus.textContent = days.length
     ? "选择日期后开始批量预测，结果会自动保存到命中记录。"
     : "当前赛程里没有可批量预测的未来比赛。";
+}
+
+async function loadSchedule() {
+  let statusMessage = "";
+  try {
+    const res = await fetch(`${apiPath("schedule")}?v=${Date.now()}`, { cache: "no-store" });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || "赛程读取失败");
+    if (Array.isArray(data.matches) && data.matches.length) {
+      schedule = data.matches;
+      statusMessage = `已读取实时赛程：${data.matches.length} 场未来比赛。`;
+    } else {
+      schedule = [...fallbackSchedule];
+      statusMessage = data.sourceError
+        ? `实时赛程暂不可用，已使用本地赛程兜底：${data.sourceError}`
+        : "实时赛程暂无未来比赛，已使用本地赛程兜底。";
+    }
+  } catch (error) {
+    schedule = [...fallbackSchedule];
+    statusMessage = `实时赛程读取失败，已使用本地赛程兜底：${error.message}`;
+  }
+  addBatchDateOptions();
+  renderSchedule();
+  if (statusMessage) batchStatus.textContent = statusMessage;
 }
 
 function addMemoryTeamOptions() {
@@ -498,7 +523,7 @@ refreshLiveButton.addEventListener("click", () => {
 batchPredictButton.addEventListener("click", runBatchPrediction);
 refreshMemoryButton.addEventListener("click", refreshMemory);
 
-renderSchedule();
+loadSchedule();
 loadRecords();
 loadMemory();
 loadConfig().catch((error) => {
