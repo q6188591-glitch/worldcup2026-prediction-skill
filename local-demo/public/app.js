@@ -45,6 +45,22 @@ const teamASelect = document.querySelector("#teamA");
 const teamBSelect = document.querySelector("#teamB");
 const activeModelLabel = document.querySelector("#activeModelLabel");
 const activeBaseLabel = document.querySelector("#activeBaseLabel");
+const accountStatus = document.querySelector("#accountStatus");
+const accountMeta = document.querySelector("#accountMeta");
+const authForms = document.querySelector("#authForms");
+const authPhone = document.querySelector("#authPhone");
+const authPassword = document.querySelector("#authPassword");
+const loginButton = document.querySelector("#loginButton");
+const registerButton = document.querySelector("#registerButton");
+const logoutButton = document.querySelector("#logoutButton");
+const memberArea = document.querySelector("#memberArea");
+const planGrid = document.querySelector("#planGrid");
+const payNote = document.querySelector("#payNote");
+const createOrderButton = document.querySelector("#createOrderButton");
+const orderList = document.querySelector("#orderList");
+const adminTokenInput = document.querySelector("#adminToken");
+const loadAdminOrdersButton = document.querySelector("#loadAdminOrders");
+const adminOrders = document.querySelector("#adminOrders");
 const matchRail = document.querySelector("#matchRail");
 const scheduleGrid = document.querySelector("#scheduleGrid");
 const recordStats = document.querySelector("#recordStats");
@@ -66,6 +82,9 @@ let isBatchPredicting = false;
 let predictRequestId = 0;
 let hasPrediction = false;
 let lastLiveStamp = "";
+let currentUser = null;
+let plans = [];
+let selectedPlanId = "";
 
 function apiPath(path) {
   return `api/${path.replace(/^\//, "")}`;
@@ -166,6 +185,121 @@ teamBSelect.value = "南非";
 
 function setText(id, value) {
   document.querySelector(id).textContent = value;
+}
+
+function accountLabel(user) {
+  if (!user) return "未登录";
+  return user.isMember ? `${user.phone} · ${user.planName || "会员"}` : `${user.phone} · 免费用户`;
+}
+
+function renderAccount(user) {
+  currentUser = user;
+  accountStatus.textContent = accountLabel(user);
+  accountMeta.textContent = user
+    ? user.isMember
+      ? `会员有效期至 ${formatTime(user.memberUntilIso)}`
+      : `剩余免费预测 ${user.freePredictionsLeft} 次`
+    : "注册后赠送 3 次免费预测";
+  authForms.hidden = Boolean(user);
+  logoutButton.hidden = !user;
+  memberArea.hidden = !user;
+  if (user) renderPlans();
+}
+
+function renderPlans() {
+  planGrid.innerHTML = "";
+  for (const plan of plans) {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = `plan-card${selectedPlanId === plan.id ? " is-selected" : ""}`;
+    button.innerHTML = `<strong>${plan.name}</strong><span>￥${plan.price}</span><small>${plan.durationDays > 1000 ? "长期会员" : `${plan.durationDays} 天权益`}</small>`;
+    button.addEventListener("click", () => {
+      selectedPlanId = plan.id;
+      renderPlans();
+    });
+    planGrid.append(button);
+  }
+  if (!selectedPlanId && plans[0]) selectedPlanId = plans[0].id;
+}
+
+function renderOrders(container, orders, { admin = false } = {}) {
+  container.innerHTML = "";
+  for (const order of orders) {
+    const row = document.createElement("div");
+    row.className = "order-item";
+    row.innerHTML = `
+      <strong>${order.planName} · ￥${order.amount}</strong>
+      <span>${order.phone || ""} ${order.orderNo}</span>
+      <small>${order.status === "approved" ? "已开通" : "待审核"} · ${formatTime(order.createdAtIso)}</small>
+      ${admin && order.status !== "approved" ? `<button type="button" data-order="${order.id}">确认开通</button>` : ""}
+    `;
+    if (admin) {
+      const button = row.querySelector("button");
+      if (button) button.addEventListener("click", () => approveAdminOrder(order.id));
+    }
+    container.append(row);
+  }
+  if (!orders.length) container.innerHTML = `<div class="order-empty">暂无订单</div>`;
+}
+
+async function loadAuth() {
+  const res = await fetch(apiPath("auth/me"));
+  const data = await res.json();
+  plans = data.plans || [];
+  selectedPlanId ||= plans[0]?.id || "";
+  renderAccount(data.user);
+  if (data.user) loadOrders();
+}
+
+async function submitAuth(mode) {
+  const res = await fetch(apiPath(`auth/${mode}`), {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ phone: authPhone.value, password: authPassword.value }),
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || "账号操作失败");
+  renderAccount(data.user);
+  loadOrders();
+}
+
+async function loadOrders() {
+  if (!currentUser) return;
+  const res = await fetch(apiPath("orders"));
+  const data = await res.json();
+  if (res.ok) renderOrders(orderList, data.orders || []);
+}
+
+async function createOrder() {
+  if (!selectedPlanId) return;
+  const res = await fetch(apiPath("orders"), {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ planId: selectedPlanId, payNote: payNote.value }),
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || "订单创建失败");
+  payNote.value = "";
+  loadOrders();
+}
+
+async function loadAdminOrders() {
+  const res = await fetch(apiPath("admin/orders"), { headers: { "x-admin-token": adminTokenInput.value } });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || "后台订单读取失败");
+  renderOrders(adminOrders, data.orders || [], { admin: true });
+}
+
+async function approveAdminOrder(orderId) {
+  const res = await fetch(apiPath("admin/orders/approve"), {
+    method: "POST",
+    headers: { "content-type": "application/json", "x-admin-token": adminTokenInput.value },
+    body: JSON.stringify({ orderId }),
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || "开通失败");
+  if (currentUser?.id === data.user?.id) renderAccount(data.user);
+  loadAdminOrders();
 }
 
 function selectMatch(match) {
@@ -504,6 +638,7 @@ async function runBatchPrediction() {
       okCount += 1;
       renderBatchRow(match, "done", data);
       renderPrediction(data);
+      if (data.user) renderAccount(data.user);
     } catch (error) {
       renderBatchRow(match, "error", error.message);
     }
@@ -539,6 +674,7 @@ form.addEventListener("submit", async (event) => {
     if (!res.ok) throw new Error(data.hint || data.detail || data.error || "请求失败");
     if (requestId !== predictRequestId) return;
     renderPrediction(data);
+    if (data.user) renderAccount(data.user);
     activeBaseLabel.textContent = "预测完成";
   } catch (error) {
     if (requestId === predictRequestId) activeBaseLabel.textContent = error.message;
@@ -552,9 +688,20 @@ refreshLiveButton.addEventListener("click", () => {
   loadRecords();
 });
 
+loginButton.addEventListener("click", () => submitAuth("login").catch((error) => { accountMeta.textContent = error.message; }));
+registerButton.addEventListener("click", () => submitAuth("register").catch((error) => { accountMeta.textContent = error.message; }));
+logoutButton.addEventListener("click", async () => {
+  await fetch(apiPath("auth/logout"), { method: "POST" });
+  renderAccount(null);
+});
+createOrderButton.addEventListener("click", () => createOrder().catch((error) => { accountMeta.textContent = error.message; }));
+loadAdminOrdersButton.addEventListener("click", () => loadAdminOrders().catch((error) => { adminOrders.innerHTML = `<div class="order-empty">${error.message}</div>`; }));
 batchPredictButton.addEventListener("click", runBatchPrediction);
 refreshMemoryButton.addEventListener("click", refreshMemory);
 
+loadAuth().catch((error) => {
+  accountMeta.textContent = error.message;
+});
 loadSchedule();
 loadRecords();
 loadMemory();

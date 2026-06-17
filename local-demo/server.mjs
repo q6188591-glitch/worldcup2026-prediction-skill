@@ -3,6 +3,7 @@ import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { randomBytes, randomUUID, scryptSync, timingSafeEqual } from "node:crypto";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(__dirname, "..");
@@ -10,6 +11,8 @@ const publicDir = path.join(__dirname, "public");
 const dataDir = path.join(__dirname, "data");
 const predictionsPath = path.join(dataDir, "predictions.json");
 const memoryPath = path.join(dataDir, "team-memory.json");
+const usersPath = path.join(dataDir, "users.json");
+const ordersPath = path.join(dataDir, "orders.json");
 
 async function loadLocalEnv() {
   const envPath = path.join(__dirname, ".env.local");
@@ -52,6 +55,13 @@ const reviewSourceUrls = (process.env.REVIEW_SOURCE_URLS || "https://www.espn.co
   .split(",")
   .map((url) => url.trim())
   .filter(Boolean);
+const membershipPlans = {
+  trial3: { id: "trial3", name: "新用户免费", price: 0, freePredictions: 3, durationDays: 0 },
+  day3: { id: "day3", name: "3天卡", price: 68, durationDays: 3 },
+  week: { id: "week", name: "周卡", price: 138, durationDays: 7 },
+  halfMonth: { id: "halfMonth", name: "半月卡", price: 298, durationDays: 15 },
+  lifetime: { id: "lifetime", name: "长期会员", price: 598, durationDays: 36500 },
+};
 let liveContextCache = null;
 let liveContextPromise = null;
 const liveClients = new Set();
@@ -175,6 +185,113 @@ function fableCookieHeaders(nextUsed) {
 
 function selectedProviderHeaders(selected) {
   return selected.shouldIncrementFable ? fableCookieHeaders(selected.used + 1) : {};
+}
+
+async function readJsonFile(filePath, fallback) {
+  try {
+    return JSON.parse(await readFile(filePath, "utf8"));
+  } catch (error) {
+    if (error.code === "ENOENT") return fallback;
+    throw error;
+  }
+}
+
+async function writeJsonFile(filePath, value) {
+  await mkdir(dataDir, { recursive: true });
+  await writeFile(filePath, `${JSON.stringify(value, null, 2)}\n`, "utf8");
+}
+
+async function readUsers() {
+  const data = await readJsonFile(usersPath, { users: [], sessions: [] });
+  data.users ||= [];
+  data.sessions ||= [];
+  return data;
+}
+
+async function writeUsers(data) {
+  await writeJsonFile(usersPath, data);
+}
+
+async function readOrders() {
+  return await readJsonFile(ordersPath, []);
+}
+
+async function writeOrders(orders) {
+  await writeJsonFile(ordersPath, orders);
+}
+
+function normalizePhone(phone) {
+  return String(phone || "").replace(/\D/g, "");
+}
+
+function passwordHash(password, salt = randomBytes(16).toString("hex")) {
+  const hash = scryptSync(String(password), salt, 32).toString("hex");
+  return `${salt}:${hash}`;
+}
+
+function verifyPassword(password, stored) {
+  const [salt, hash] = String(stored || "").split(":");
+  if (!salt || !hash) return false;
+  const next = Buffer.from(passwordHash(password, salt).split(":")[1], "hex");
+  const current = Buffer.from(hash, "hex");
+  return current.length === next.length && timingSafeEqual(current, next);
+}
+
+function publicUser(user) {
+  const memberUntil = user.memberUntilIso ? new Date(user.memberUntilIso) : null;
+  const isMember = Boolean(memberUntil && memberUntil > new Date());
+  return {
+    id: user.id,
+    phone: user.phone,
+    freePredictionsLeft: Math.max(0, Number(user.freePredictionsLeft || 0)),
+    memberUntilIso: user.memberUntilIso || "",
+    isMember,
+    planName: user.planName || "",
+    createdAtIso: user.createdAtIso,
+  };
+}
+
+function sessionCookie(token) {
+  return `wc_session=${encodeURIComponent(token)}; Max-Age=2592000; Path=/; HttpOnly; SameSite=Lax`;
+}
+
+function clearSessionCookie() {
+  return "wc_session=; Max-Age=0; Path=/; HttpOnly; SameSite=Lax";
+}
+
+async function currentUser(req) {
+  const token = parseCookies(req).wc_session;
+  if (!token) return null;
+  const data = await readUsers();
+  const session = data.sessions.find((item) => item.token === token && new Date(item.expiresAtIso) > new Date());
+  if (!session) return null;
+  return data.users.find((user) => user.id === session.userId) || null;
+}
+
+async function requireUser(req, res) {
+  const user = await currentUser(req);
+  if (!user) {
+    sendJson(res, 401, { error: "请先登录后再预测", code: "LOGIN_REQUIRED" });
+    return null;
+  }
+  return user;
+}
+
+function hasPredictQuota(user) {
+  const memberUntil = user.memberUntilIso ? new Date(user.memberUntilIso) : null;
+  return Boolean(memberUntil && memberUntil > new Date()) || Number(user.freePredictionsLeft || 0) > 0;
+}
+
+async function consumePredictionQuota(userId) {
+  const data = await readUsers();
+  const user = data.users.find((item) => item.id === userId);
+  if (!user) return null;
+  const memberUntil = user.memberUntilIso ? new Date(user.memberUntilIso) : null;
+  if (!(memberUntil && memberUntil > new Date())) {
+    user.freePredictionsLeft = Math.max(0, Number(user.freePredictionsLeft || 0) - 1);
+  }
+  await writeUsers(data);
+  return user;
 }
 
 function predictionKey(teamA, teamB) {
@@ -305,7 +422,138 @@ async function listModels(req, res) {
   sendJson(res, 200, { models, raw: data });
 }
 
+async function authMe(req, res) {
+  const user = await currentUser(req);
+  sendJson(res, 200, { user: user ? publicUser(user) : null, plans: Object.values(membershipPlans).filter((plan) => plan.price > 0) });
+}
+
+async function register(req, res) {
+  const payload = await readJson(req);
+  const phone = normalizePhone(payload.phone);
+  const password = String(payload.password || "");
+  if (!/^1?\d{10,11}$/.test(phone) || password.length < 6) {
+    sendJson(res, 422, { error: "请输入有效手机号和至少 6 位密码" });
+    return;
+  }
+  const data = await readUsers();
+  if (data.users.some((user) => user.phone === phone)) {
+    sendJson(res, 409, { error: "这个手机号已经注册" });
+    return;
+  }
+  const user = {
+    id: randomUUID(),
+    phone,
+    passwordHash: passwordHash(password),
+    freePredictionsLeft: membershipPlans.trial3.freePredictions,
+    memberUntilIso: "",
+    planName: "新用户免费",
+    createdAtIso: new Date().toISOString(),
+  };
+  const token = randomUUID();
+  data.users.push(user);
+  data.sessions.push({ token, userId: user.id, createdAtIso: new Date().toISOString(), expiresAtIso: new Date(Date.now() + 30 * 86400_000).toISOString() });
+  await writeUsers(data);
+  sendJson(res, 200, { user: publicUser(user) }, { "set-cookie": sessionCookie(token) });
+}
+
+async function login(req, res) {
+  const payload = await readJson(req);
+  const phone = normalizePhone(payload.phone);
+  const data = await readUsers();
+  const user = data.users.find((item) => item.phone === phone);
+  if (!user || !verifyPassword(payload.password, user.passwordHash)) {
+    sendJson(res, 401, { error: "手机号或密码错误" });
+    return;
+  }
+  const token = randomUUID();
+  data.sessions.push({ token, userId: user.id, createdAtIso: new Date().toISOString(), expiresAtIso: new Date(Date.now() + 30 * 86400_000).toISOString() });
+  data.sessions = data.sessions.filter((item) => new Date(item.expiresAtIso) > new Date()).slice(-5000);
+  await writeUsers(data);
+  sendJson(res, 200, { user: publicUser(user) }, { "set-cookie": sessionCookie(token) });
+}
+
+async function logout(req, res) {
+  const token = parseCookies(req).wc_session;
+  const data = await readUsers();
+  data.sessions = data.sessions.filter((item) => item.token !== token);
+  await writeUsers(data);
+  sendJson(res, 200, { ok: true }, { "set-cookie": clearSessionCookie() });
+}
+
+async function createOrder(req, res) {
+  const user = await requireUser(req, res);
+  if (!user) return;
+  const payload = await readJson(req);
+  const plan = membershipPlans[payload.planId];
+  if (!plan || !plan.price) {
+    sendJson(res, 422, { error: "请选择有效套餐" });
+    return;
+  }
+  const orders = await readOrders();
+  const order = {
+    id: randomUUID(),
+    orderNo: `WC${Date.now()}${String(Math.floor(Math.random() * 1000)).padStart(3, "0")}`,
+    userId: user.id,
+    phone: user.phone,
+    planId: plan.id,
+    planName: plan.name,
+    amount: plan.price,
+    status: "pending",
+    payNote: String(payload.payNote || "").slice(0, 200),
+    createdAtIso: new Date().toISOString(),
+    approvedAtIso: "",
+  };
+  orders.unshift(order);
+  await writeOrders(orders);
+  sendJson(res, 200, { order });
+}
+
+async function myOrders(req, res) {
+  const user = await requireUser(req, res);
+  if (!user) return;
+  const orders = await readOrders();
+  sendJson(res, 200, { orders: orders.filter((order) => order.userId === user.id).slice(0, 20) });
+}
+
+async function adminOrders(req, res) {
+  if (!requireAdmin(req, res)) return;
+  const orders = await readOrders();
+  sendJson(res, 200, { orders: orders.slice(0, 100) });
+}
+
+async function approveOrder(req, res) {
+  if (!requireAdmin(req, res)) return;
+  const payload = await readJson(req);
+  const orders = await readOrders();
+  const order = orders.find((item) => item.id === payload.orderId || item.orderNo === payload.orderNo);
+  if (!order) {
+    sendJson(res, 404, { error: "订单不存在" });
+    return;
+  }
+  const plan = membershipPlans[order.planId];
+  const data = await readUsers();
+  const user = data.users.find((item) => item.id === order.userId);
+  if (!user || !plan) {
+    sendJson(res, 404, { error: "用户或套餐不存在" });
+    return;
+  }
+  const start = user.memberUntilIso && new Date(user.memberUntilIso) > new Date() ? new Date(user.memberUntilIso) : new Date();
+  user.memberUntilIso = new Date(start.getTime() + plan.durationDays * 86400_000).toISOString();
+  user.planName = plan.name;
+  order.status = "approved";
+  order.approvedAtIso = new Date().toISOString();
+  await writeUsers(data);
+  await writeOrders(orders);
+  sendJson(res, 200, { order, user: publicUser(user) });
+}
+
 async function predict(req, res) {
+  const account = await requireUser(req, res);
+  if (!account) return;
+  if (!hasPredictQuota(account)) {
+    sendJson(res, 402, { error: "免费预测次数已用完，请开通会员后继续预测", code: "PAYMENT_REQUIRED", user: publicUser(account) });
+    return;
+  }
   const payload = await readJson(req);
   const { teamA, teamB, stage = "小组赛" } = payload;
 
@@ -344,7 +592,8 @@ async function predict(req, res) {
     });
     const result = JSON.parse(content);
     await savePredictionSnapshot(payload, result);
-    sendJson(res, 200, result, selectedProviderHeaders(selected));
+    const updatedUser = await consumePredictionQuota(account.id);
+    sendJson(res, 200, { ...result, user: publicUser(updatedUser || account) }, selectedProviderHeaders(selected));
   } catch (error) {
     if (selected.provider.name === "fable" && primaryProvider.apiKey) {
       try {
@@ -363,7 +612,8 @@ async function predict(req, res) {
         });
         const result = JSON.parse(content);
         await savePredictionSnapshot(payload, result);
-        sendJson(res, 200, result, selectedProviderHeaders(selected));
+        const updatedUser = await consumePredictionQuota(account.id);
+        sendJson(res, 200, { ...result, user: publicUser(updatedUser || account) }, selectedProviderHeaders(selected));
         return;
       } catch (fallbackError) {
         error = fallbackError;
@@ -1054,6 +1304,38 @@ createServer(async (req, res) => {
     const route = new URL(req.url, `http://${req.headers.host}`).pathname;
     if (req.method === "GET" && route === "/api/config") {
       sendJson(res, 200, publicConfig());
+      return;
+    }
+    if (req.method === "GET" && route === "/api/auth/me") {
+      await authMe(req, res);
+      return;
+    }
+    if (req.method === "POST" && route === "/api/auth/register") {
+      await register(req, res);
+      return;
+    }
+    if (req.method === "POST" && route === "/api/auth/login") {
+      await login(req, res);
+      return;
+    }
+    if (req.method === "POST" && route === "/api/auth/logout") {
+      await logout(req, res);
+      return;
+    }
+    if (req.method === "POST" && route === "/api/orders") {
+      await createOrder(req, res);
+      return;
+    }
+    if (req.method === "GET" && route === "/api/orders") {
+      await myOrders(req, res);
+      return;
+    }
+    if (req.method === "GET" && route === "/api/admin/orders") {
+      await adminOrders(req, res);
+      return;
+    }
+    if (req.method === "POST" && route === "/api/admin/orders/approve") {
+      await approveOrder(req, res);
       return;
     }
     if (req.method === "GET" && route === "/api/live") {

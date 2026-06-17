@@ -459,6 +459,113 @@ button.secondary:hover {
   margin-top: 12px;
 }
 
+.account-panel {
+  display: grid;
+  gap: 12px;
+  margin-bottom: 18px;
+  padding: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.7);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.92);
+  backdrop-filter: blur(10px);
+}
+
+.account-head,
+.auth-grid,
+.order-row {
+  display: grid;
+  grid-template-columns: 1fr max-content;
+  gap: 12px;
+  align-items: end;
+}
+
+.account-head span {
+  display: block;
+  color: #16261d;
+  font-size: 18px;
+  font-weight: 900;
+}
+
+.account-head small {
+  color: #53625a;
+  font-weight: 800;
+}
+
+.auth-grid {
+  grid-template-columns: 1fr 1fr max-content max-content;
+}
+
+.member-area {
+  display: grid;
+  gap: 12px;
+}
+
+.plan-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.plan-card {
+  display: grid;
+  gap: 4px;
+  min-height: 86px;
+  padding: 12px;
+  border: 1px solid #cfe1d6;
+  background: #f8fbf9;
+  color: #16261d;
+}
+
+.plan-card span {
+  color: #145a36;
+  font-size: 22px;
+  font-weight: 900;
+}
+
+.plan-card small {
+  color: #66746b;
+  font-weight: 800;
+}
+
+.plan-card.is-selected {
+  border-color: #145a36;
+  background: #eaf7ef;
+}
+
+.order-list {
+  display: grid;
+  gap: 8px;
+}
+
+.order-item,
+.order-empty {
+  display: grid;
+  grid-template-columns: 1fr max-content max-content max-content;
+  gap: 10px;
+  align-items: center;
+  min-height: 44px;
+  padding: 10px 12px;
+  border: 1px solid #dce8e0;
+  border-radius: 8px;
+  background: #f7fbf8;
+  color: #53625a;
+}
+
+.order-item strong {
+  color: #16261d;
+}
+
+.admin-box {
+  border-top: 1px solid #dce8e0;
+  padding-top: 10px;
+}
+
+.admin-box summary {
+  cursor: pointer;
+  color: #145a36;
+  font-weight: 900;
+}
+
 .memory-card {
   padding: 0;
   border: 1px solid #dce8e0;
@@ -888,6 +995,11 @@ pre {
 
   .match-rail,
   .versus-grid,
+  .auth-grid,
+  .account-head,
+  .order-row,
+  .plan-grid,
+  .order-item,
   .batch-controls,
   .batch-row,
   .memory-controls,

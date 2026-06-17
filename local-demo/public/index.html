@@ -37,6 +37,44 @@
         </div>
       </div>
 
+      <section class="account-panel">
+        <div class="account-head">
+          <div>
+            <span id="accountStatus">未登录</span>
+            <small id="accountMeta">注册后赠送 3 次免费预测</small>
+          </div>
+          <button id="logoutButton" class="secondary" type="button" hidden>退出登录</button>
+        </div>
+        <div id="authForms" class="auth-grid">
+          <label>
+            手机号
+            <input id="authPhone" inputmode="tel" placeholder="输入手机号" />
+          </label>
+          <label>
+            密码
+            <input id="authPassword" type="password" placeholder="至少 6 位" />
+          </label>
+          <button id="loginButton" type="button">登录</button>
+          <button id="registerButton" class="secondary" type="button">注册</button>
+        </div>
+        <div id="memberArea" class="member-area" hidden>
+          <div id="planGrid" class="plan-grid"></div>
+          <div class="order-row">
+            <input id="payNote" placeholder="付款备注/微信昵称/订单说明" />
+            <button id="createOrderButton" type="button">提交充值订单</button>
+          </div>
+          <div id="orderList" class="order-list"></div>
+          <details class="admin-box">
+            <summary>管理员审核</summary>
+            <div class="order-row">
+              <input id="adminToken" placeholder="ADMIN_TOKEN" />
+              <button id="loadAdminOrders" type="button">读取订单</button>
+            </div>
+            <div id="adminOrders" class="order-list"></div>
+          </details>
+        </div>
+      </section>
+
       <section class="live-panel">
         <div>
           <span id="liveStatus">实时情报连接中</span>
