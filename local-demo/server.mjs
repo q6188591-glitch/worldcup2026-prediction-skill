@@ -66,8 +66,8 @@ const membershipPlans = {
   deluxe: { id: "deluxe", name: "豪华包", price: 198, credits: 500 },
 };
 const paymentConfig = {
-  wechatQrUrl: process.env.WECHAT_PAY_QR_URL || "",
-  alipayQrUrl: process.env.ALIPAY_PAY_QR_URL || "",
+  wechatQrUrl: process.env.WECHAT_PAY_QR_URL || "/assets/payment/wechat-pay.jpg",
+  alipayQrUrl: process.env.ALIPAY_PAY_QR_URL || "/assets/payment/alipay.jpg",
   payeeName: process.env.PAYMENT_PAYEE_NAME || "",
 };
 let liveContextCache = null;
