@@ -58,6 +58,7 @@ const reviewSourceUrls = (process.env.REVIEW_SOURCE_URLS || "https://www.espn.co
   .filter(Boolean);
 const membershipPlans = {
   trial3: { id: "trial3", name: "新用户免费", price: 0, credits: 3 },
+  paytest: { id: "paytest", name: "支付测试包", price: 0.01, credits: 1 },
   starter: { id: "starter", name: "体验包", price: 9.9, credits: 10 },
   group: { id: "group", name: "小组赛包", price: 29.9, credits: 40 },
   pro: { id: "pro", name: "进阶包", price: 68, credits: 120 },
