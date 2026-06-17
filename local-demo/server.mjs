@@ -56,11 +56,12 @@ const reviewSourceUrls = (process.env.REVIEW_SOURCE_URLS || "https://www.espn.co
   .map((url) => url.trim())
   .filter(Boolean);
 const membershipPlans = {
-  trial3: { id: "trial3", name: "新用户免费", price: 0, freePredictions: 3, durationDays: 0 },
-  day3: { id: "day3", name: "3天卡", price: 68, durationDays: 3 },
-  week: { id: "week", name: "周卡", price: 138, durationDays: 7 },
-  halfMonth: { id: "halfMonth", name: "半月卡", price: 298, durationDays: 15 },
-  lifetime: { id: "lifetime", name: "长期会员", price: 598, durationDays: 36500 },
+  trial3: { id: "trial3", name: "新用户免费", price: 0, credits: 3 },
+  starter: { id: "starter", name: "体验包", price: 9.9, credits: 10 },
+  group: { id: "group", name: "小组赛包", price: 29.9, credits: 40 },
+  pro: { id: "pro", name: "进阶包", price: 68, credits: 120 },
+  full: { id: "full", name: "全程包", price: 128, credits: 260 },
+  deluxe: { id: "deluxe", name: "豪华包", price: 198, credits: 500 },
 };
 let liveContextCache = null;
 let liveContextPromise = null;
@@ -238,14 +239,13 @@ function verifyPassword(password, stored) {
 }
 
 function publicUser(user) {
-  const memberUntil = user.memberUntilIso ? new Date(user.memberUntilIso) : null;
-  const isMember = Boolean(memberUntil && memberUntil > new Date());
+  const credits = Number(user.predictionCredits ?? user.freePredictionsLeft ?? 0);
   return {
     id: user.id,
     phone: user.phone,
-    freePredictionsLeft: Math.max(0, Number(user.freePredictionsLeft || 0)),
-    memberUntilIso: user.memberUntilIso || "",
-    isMember,
+    predictionCredits: Math.max(0, credits),
+    freePredictionsLeft: Math.max(0, credits),
+    isMember: credits > 0,
     planName: user.planName || "",
     createdAtIso: user.createdAtIso,
   };
@@ -278,18 +278,15 @@ async function requireUser(req, res) {
 }
 
 function hasPredictQuota(user) {
-  const memberUntil = user.memberUntilIso ? new Date(user.memberUntilIso) : null;
-  return Boolean(memberUntil && memberUntil > new Date()) || Number(user.freePredictionsLeft || 0) > 0;
+  return Number(user.predictionCredits ?? user.freePredictionsLeft ?? 0) > 0;
 }
 
 async function consumePredictionQuota(userId) {
   const data = await readUsers();
   const user = data.users.find((item) => item.id === userId);
   if (!user) return null;
-  const memberUntil = user.memberUntilIso ? new Date(user.memberUntilIso) : null;
-  if (!(memberUntil && memberUntil > new Date())) {
-    user.freePredictionsLeft = Math.max(0, Number(user.freePredictionsLeft || 0) - 1);
-  }
+  user.predictionCredits = Math.max(0, Number(user.predictionCredits ?? user.freePredictionsLeft ?? 0) - 1);
+  user.freePredictionsLeft = user.predictionCredits;
   await writeUsers(data);
   return user;
 }
@@ -444,8 +441,8 @@ async function register(req, res) {
     id: randomUUID(),
     phone,
     passwordHash: passwordHash(password),
-    freePredictionsLeft: membershipPlans.trial3.freePredictions,
-    memberUntilIso: "",
+    predictionCredits: membershipPlans.trial3.credits,
+    freePredictionsLeft: membershipPlans.trial3.credits,
     planName: "新用户免费",
     createdAtIso: new Date().toISOString(),
   };
@@ -498,6 +495,7 @@ async function createOrder(req, res) {
     planId: plan.id,
     planName: plan.name,
     amount: plan.price,
+    credits: plan.credits,
     status: "pending",
     payNote: String(payload.payNote || "").slice(0, 200),
     createdAtIso: new Date().toISOString(),
@@ -537,8 +535,8 @@ async function approveOrder(req, res) {
     sendJson(res, 404, { error: "用户或套餐不存在" });
     return;
   }
-  const start = user.memberUntilIso && new Date(user.memberUntilIso) > new Date() ? new Date(user.memberUntilIso) : new Date();
-  user.memberUntilIso = new Date(start.getTime() + plan.durationDays * 86400_000).toISOString();
+  user.predictionCredits = Number(user.predictionCredits ?? user.freePredictionsLeft ?? 0) + plan.credits;
+  user.freePredictionsLeft = user.predictionCredits;
   user.planName = plan.name;
   order.status = "approved";
   order.approvedAtIso = new Date().toISOString();
@@ -551,7 +549,7 @@ async function predict(req, res) {
   const account = await requireUser(req, res);
   if (!account) return;
   if (!hasPredictQuota(account)) {
-    sendJson(res, 402, { error: "免费预测次数已用完，请开通会员后继续预测", code: "PAYMENT_REQUIRED", user: publicUser(account) });
+    sendJson(res, 402, { error: "预测次数已用完，请充值次数包后继续预测", code: "PAYMENT_REQUIRED", user: publicUser(account) });
     return;
   }
   const payload = await readJson(req);

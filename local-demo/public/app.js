@@ -189,17 +189,15 @@ function setText(id, value) {
 
 function accountLabel(user) {
   if (!user) return "未登录";
-  return user.isMember ? `${user.phone} · ${user.planName || "会员"}` : `${user.phone} · 免费用户`;
+  return `${user.phone} · 剩余 ${user.predictionCredits ?? user.freePredictionsLeft ?? 0} 次`;
 }
 
 function renderAccount(user) {
   currentUser = user;
   accountStatus.textContent = accountLabel(user);
   accountMeta.textContent = user
-    ? user.isMember
-      ? `会员有效期至 ${formatTime(user.memberUntilIso)}`
-      : `剩余免费预测 ${user.freePredictionsLeft} 次`
-    : "注册后赠送 3 次免费预测";
+    ? `每预测 1 场消耗 1 次；批量预测按场次扣除。`
+    : "注册后赠送 3 次免费预测，每预测 1 场消耗 1 次";
   authForms.hidden = Boolean(user);
   logoutButton.hidden = !user;
   memberArea.hidden = !user;
@@ -212,7 +210,7 @@ function renderPlans() {
     const button = document.createElement("button");
     button.type = "button";
     button.className = `plan-card${selectedPlanId === plan.id ? " is-selected" : ""}`;
-    button.innerHTML = `<strong>${plan.name}</strong><span>￥${plan.price}</span><small>${plan.durationDays > 1000 ? "长期会员" : `${plan.durationDays} 天权益`}</small>`;
+    button.innerHTML = `<strong>${plan.name}</strong><span>￥${plan.price}</span><small>${plan.credits} 次预测</small>`;
     button.addEventListener("click", () => {
       selectedPlanId = plan.id;
       renderPlans();
@@ -230,8 +228,8 @@ function renderOrders(container, orders, { admin = false } = {}) {
     row.innerHTML = `
       <strong>${order.planName} · ￥${order.amount}</strong>
       <span>${order.phone || ""} ${order.orderNo}</span>
-      <small>${order.status === "approved" ? "已开通" : "待审核"} · ${formatTime(order.createdAtIso)}</small>
-      ${admin && order.status !== "approved" ? `<button type="button" data-order="${order.id}">确认开通</button>` : ""}
+      <small>${order.status === "approved" ? "已到账" : "待审核"} · ${order.credits || ""} 次 · ${formatTime(order.createdAtIso)}</small>
+      ${admin && order.status !== "approved" ? `<button type="button" data-order="${order.id}">确认到账</button>` : ""}
     `;
     if (admin) {
       const button = row.querySelector("button");
@@ -609,6 +607,15 @@ async function runBatchPrediction() {
   const matches = schedule.filter((match) => isPredictableMatch(match) && matchDay(match.date) === day);
   if (!matches.length) {
     batchStatus.textContent = "这个日期没有可批量预测的比赛。";
+    return;
+  }
+  const credits = Number(currentUser?.predictionCredits ?? currentUser?.freePredictionsLeft ?? 0);
+  if (!currentUser) {
+    batchStatus.textContent = "请先登录后再使用一键预测。";
+    return;
+  }
+  if (credits < matches.length) {
+    batchStatus.textContent = `本次需要 ${matches.length} 次预测，当前剩余 ${credits} 次，请先充值次数包。`;
     return;
   }
 
