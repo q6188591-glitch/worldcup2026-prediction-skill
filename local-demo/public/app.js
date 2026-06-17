@@ -55,12 +55,22 @@ const registerButton = document.querySelector("#registerButton");
 const logoutButton = document.querySelector("#logoutButton");
 const memberArea = document.querySelector("#memberArea");
 const planGrid = document.querySelector("#planGrid");
-const payNote = document.querySelector("#payNote");
-const createOrderButton = document.querySelector("#createOrderButton");
+const wechatQr = document.querySelector("#wechatQr");
+const alipayQr = document.querySelector("#alipayQr");
+const selectedPlanText = document.querySelector("#selectedPlanText");
+const payeeName = document.querySelector("#payeeName");
+const redeemCodeInput = document.querySelector("#redeemCode");
+const redeemButton = document.querySelector("#redeemButton");
+const redeemStatus = document.querySelector("#redeemStatus");
 const orderList = document.querySelector("#orderList");
 const adminTokenInput = document.querySelector("#adminToken");
+const adminPlanSelect = document.querySelector("#adminPlan");
+const adminCodeCount = document.querySelector("#adminCodeCount");
+const adminCodeNote = document.querySelector("#adminCodeNote");
+const generateCodesButton = document.querySelector("#generateCodes");
 const loadAdminOrdersButton = document.querySelector("#loadAdminOrders");
 const adminOrders = document.querySelector("#adminOrders");
+const adminCodes = document.querySelector("#adminCodes");
 const matchRail = document.querySelector("#matchRail");
 const scheduleGrid = document.querySelector("#scheduleGrid");
 const recordStats = document.querySelector("#recordStats");
@@ -85,6 +95,7 @@ let lastLiveStamp = "";
 let currentUser = null;
 let plans = [];
 let selectedPlanId = "";
+let payment = {};
 
 function apiPath(path) {
   return `api/${path.replace(/^\//, "")}`;
@@ -208,7 +219,11 @@ function renderAccount(user) {
   authForms.hidden = Boolean(user);
   logoutButton.hidden = !user;
   memberArea.hidden = !user;
-  if (user) renderPlans();
+  if (user) {
+    renderPlans();
+    renderPayment();
+    renderAdminPlanOptions();
+  }
 }
 
 function renderPlans() {
@@ -221,10 +236,46 @@ function renderPlans() {
     button.addEventListener("click", () => {
       selectedPlanId = plan.id;
       renderPlans();
+      renderPayment();
+      renderAdminPlanOptions();
     });
     planGrid.append(button);
   }
   if (!selectedPlanId && plans[0]) selectedPlanId = plans[0].id;
+  renderPayment();
+}
+
+function selectedPlan() {
+  return plans.find((plan) => plan.id === selectedPlanId) || plans[0] || null;
+}
+
+function renderQr(container, url, label) {
+  container.innerHTML = "";
+  if (!url) {
+    container.textContent = "待配置";
+    return;
+  }
+  const img = document.createElement("img");
+  img.src = url;
+  img.alt = label;
+  container.append(img);
+}
+
+function renderPayment() {
+  const plan = selectedPlan();
+  selectedPlanText.textContent = plan ? `${plan.name} · ￥${plan.price} · ${plan.credits} 次` : "请选择次数包";
+  payeeName.textContent = payment.payeeName ? `收款方：${payment.payeeName}` : "";
+  renderQr(wechatQr, payment.wechatQrUrl, "微信收款二维码");
+  renderQr(alipayQr, payment.alipayQrUrl, "支付宝收款二维码");
+}
+
+function renderAdminPlanOptions() {
+  const current = adminPlanSelect.value || selectedPlanId;
+  adminPlanSelect.innerHTML = "";
+  for (const plan of plans) {
+    adminPlanSelect.add(new Option(`${plan.name} · ￥${plan.price} · ${plan.credits} 次`, plan.id));
+  }
+  adminPlanSelect.value = current && plans.some((plan) => plan.id === current) ? current : selectedPlanId;
 }
 
 function renderOrders(container, orders, { admin = false } = {}) {
@@ -247,10 +298,26 @@ function renderOrders(container, orders, { admin = false } = {}) {
   if (!orders.length) container.innerHTML = `<div class="order-empty">暂无订单</div>`;
 }
 
+function renderRedeemCodes(codes) {
+  adminCodes.innerHTML = "";
+  for (const code of codes) {
+    const row = document.createElement("div");
+    row.className = `code-item is-${code.status}`;
+    row.innerHTML = `
+      <strong>${code.code}</strong>
+      <span>${code.planName} · ￥${code.amount} · ${code.credits} 次</span>
+      <small>${code.status === "used" ? `已用 · ${code.usedByPhone || ""}` : "未使用"} · ${formatTime(code.createdAtIso)}</small>
+    `;
+    adminCodes.append(row);
+  }
+  if (!codes.length) adminCodes.innerHTML = `<div class="order-empty">暂无充值码</div>`;
+}
+
 async function loadAuth() {
   const res = await fetch(apiPath("auth/me"));
   const data = await res.json();
   plans = data.plans || [];
+  payment = data.payment || {};
   selectedPlanId ||= plans[0]?.id || "";
   renderAccount(data.user);
   if (data.user) loadOrders();
@@ -275,17 +342,53 @@ async function loadOrders() {
   if (res.ok) renderOrders(orderList, data.orders || []);
 }
 
-async function createOrder() {
-  if (!selectedPlanId) return;
-  const res = await fetch(apiPath("orders"), {
+async function redeemCode() {
+  const code = redeemCodeInput.value.trim();
+  if (!code) {
+    redeemStatus.textContent = "请输入充值码。";
+    return;
+  }
+  redeemButton.disabled = true;
+  redeemStatus.textContent = "正在兑换充值码...";
+  try {
+    const res = await fetch(apiPath("redeem"), {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ code }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || "兑换失败");
+    redeemCodeInput.value = "";
+    renderAccount(data.user);
+    redeemStatus.textContent = `兑换成功：${data.order.planName}，已到账 ${data.order.credits} 次。`;
+    loadOrders();
+  } catch (error) {
+    redeemStatus.textContent = error.message;
+  } finally {
+    redeemButton.disabled = false;
+  }
+}
+
+async function generateRedeemCodes() {
+  const res = await fetch(apiPath("admin/redeem-codes"), {
     method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({ planId: selectedPlanId, payNote: payNote.value }),
+    headers: { "content-type": "application/json", "x-admin-token": adminTokenInput.value },
+    body: JSON.stringify({
+      planId: adminPlanSelect.value || selectedPlanId,
+      count: adminCodeCount.value,
+      note: adminCodeNote.value,
+    }),
   });
   const data = await res.json();
-  if (!res.ok) throw new Error(data.error || "订单创建失败");
-  payNote.value = "";
-  loadOrders();
+  if (!res.ok) throw new Error(data.error || "充值码生成失败");
+  renderRedeemCodes(data.codes || []);
+}
+
+async function loadAdminCodes() {
+  const res = await fetch(apiPath("admin/redeem-codes"), { headers: { "x-admin-token": adminTokenInput.value } });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || "充值码读取失败");
+  renderRedeemCodes(data.codes || []);
 }
 
 async function loadAdminOrders() {
@@ -709,8 +812,12 @@ logoutButton.addEventListener("click", async () => {
   await fetch(apiPath("auth/logout"), { method: "POST" });
   renderAccount(null);
 });
-createOrderButton.addEventListener("click", () => createOrder().catch((error) => { accountMeta.textContent = error.message; }));
-loadAdminOrdersButton.addEventListener("click", () => loadAdminOrders().catch((error) => { adminOrders.innerHTML = `<div class="order-empty">${error.message}</div>`; }));
+redeemButton.addEventListener("click", redeemCode);
+generateCodesButton.addEventListener("click", () => generateRedeemCodes().catch((error) => { adminCodes.innerHTML = `<div class="order-empty">${error.message}</div>`; }));
+loadAdminOrdersButton.addEventListener("click", () => {
+  loadAdminCodes().catch((error) => { adminCodes.innerHTML = `<div class="order-empty">${error.message}</div>`; });
+  loadAdminOrders().catch((error) => { adminOrders.innerHTML = `<div class="order-empty">${error.message}</div>`; });
+});
 batchPredictButton.addEventListener("click", runBatchPrediction);
 refreshMemoryButton.addEventListener("click", refreshMemory);
 

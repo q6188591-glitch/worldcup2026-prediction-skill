@@ -13,6 +13,7 @@ const predictionsPath = path.join(dataDir, "predictions.json");
 const memoryPath = path.join(dataDir, "team-memory.json");
 const usersPath = path.join(dataDir, "users.json");
 const ordersPath = path.join(dataDir, "orders.json");
+const redeemCodesPath = path.join(dataDir, "redeem-codes.json");
 
 async function loadLocalEnv() {
   const envPath = path.join(__dirname, ".env.local");
@@ -62,6 +63,11 @@ const membershipPlans = {
   pro: { id: "pro", name: "进阶包", price: 68, credits: 120 },
   full: { id: "full", name: "全程包", price: 128, credits: 260 },
   deluxe: { id: "deluxe", name: "豪华包", price: 198, credits: 500 },
+};
+const paymentConfig = {
+  wechatQrUrl: process.env.WECHAT_PAY_QR_URL || "",
+  alipayQrUrl: process.env.ALIPAY_PAY_QR_URL || "",
+  payeeName: process.env.PAYMENT_PAYEE_NAME || "",
 };
 let liveContextCache = null;
 let liveContextPromise = null;
@@ -221,6 +227,14 @@ async function writeOrders(orders) {
   await writeJsonFile(ordersPath, orders);
 }
 
+async function readRedeemCodes() {
+  return await readJsonFile(redeemCodesPath, []);
+}
+
+async function writeRedeemCodes(codes) {
+  await writeJsonFile(redeemCodesPath, codes);
+}
+
 function normalizePhone(phone) {
   return String(phone || "").replace(/\D/g, "");
 }
@@ -248,6 +262,38 @@ function publicUser(user) {
     isMember: credits > 0,
     planName: user.planName || "",
     createdAtIso: user.createdAtIso,
+  };
+}
+
+function publicPaymentConfig() {
+  return {
+    wechatQrUrl: paymentConfig.wechatQrUrl,
+    alipayQrUrl: paymentConfig.alipayQrUrl,
+    payeeName: paymentConfig.payeeName,
+  };
+}
+
+function normalizeRedeemCode(code) {
+  return String(code || "").trim().toUpperCase().replace(/\s+/g, "");
+}
+
+function makeRedeemCode() {
+  return `WC26-${randomBytes(3).toString("hex").toUpperCase()}-${randomBytes(3).toString("hex").toUpperCase()}`;
+}
+
+function publicRedeemCode(code) {
+  return {
+    id: code.id,
+    code: code.code,
+    planId: code.planId,
+    planName: code.planName,
+    amount: code.amount,
+    credits: code.credits,
+    status: code.status,
+    note: code.note || "",
+    createdAtIso: code.createdAtIso,
+    usedAtIso: code.usedAtIso || "",
+    usedByPhone: code.usedByPhone || "",
   };
 }
 
@@ -421,7 +467,11 @@ async function listModels(req, res) {
 
 async function authMe(req, res) {
   const user = await currentUser(req);
-  sendJson(res, 200, { user: user ? publicUser(user) : null, plans: Object.values(membershipPlans).filter((plan) => plan.price > 0) });
+  sendJson(res, 200, {
+    user: user ? publicUser(user) : null,
+    plans: Object.values(membershipPlans).filter((plan) => plan.price > 0),
+    payment: publicPaymentConfig(),
+  });
 }
 
 async function register(req, res) {
@@ -543,6 +593,114 @@ async function approveOrder(req, res) {
   await writeUsers(data);
   await writeOrders(orders);
   sendJson(res, 200, { order, user: publicUser(user) });
+}
+
+async function redeemCode(req, res) {
+  const user = await requireUser(req, res);
+  if (!user) return;
+  const payload = await readJson(req);
+  const inputCode = normalizeRedeemCode(payload.code);
+  if (!inputCode) {
+    sendJson(res, 422, { error: "请输入充值码" });
+    return;
+  }
+
+  const codes = await readRedeemCodes();
+  const code = codes.find((item) => normalizeRedeemCode(item.code) === inputCode);
+  if (!code) {
+    sendJson(res, 404, { error: "充值码不存在" });
+    return;
+  }
+  if (code.status === "used") {
+    sendJson(res, 409, { error: "充值码已被使用" });
+    return;
+  }
+
+  const plan = membershipPlans[code.planId];
+  if (!plan) {
+    sendJson(res, 422, { error: "充值码对应套餐已失效" });
+    return;
+  }
+
+  const data = await readUsers();
+  const savedUser = data.users.find((item) => item.id === user.id);
+  if (!savedUser) {
+    sendJson(res, 404, { error: "用户不存在" });
+    return;
+  }
+
+  savedUser.predictionCredits = Number(savedUser.predictionCredits ?? savedUser.freePredictionsLeft ?? 0) + plan.credits;
+  savedUser.freePredictionsLeft = savedUser.predictionCredits;
+  savedUser.planName = plan.name;
+  code.status = "used";
+  code.usedAtIso = new Date().toISOString();
+  code.usedByUserId = savedUser.id;
+  code.usedByPhone = savedUser.phone;
+
+  const orders = await readOrders();
+  const order = {
+    id: randomUUID(),
+    orderNo: code.code,
+    userId: savedUser.id,
+    phone: savedUser.phone,
+    planId: plan.id,
+    planName: plan.name,
+    amount: plan.price,
+    credits: plan.credits,
+    status: "approved",
+    source: "redeem-code",
+    payNote: "充值码兑换",
+    createdAtIso: code.usedAtIso,
+    approvedAtIso: code.usedAtIso,
+  };
+  orders.unshift(order);
+
+  await writeUsers(data);
+  await writeRedeemCodes(codes);
+  await writeOrders(orders);
+  sendJson(res, 200, { ok: true, code: publicRedeemCode(code), order, user: publicUser(savedUser) });
+}
+
+async function adminRedeemCodes(req, res) {
+  if (!requireAdmin(req, res)) return;
+  const codes = await readRedeemCodes();
+  sendJson(res, 200, { codes: codes.slice(0, 200).map(publicRedeemCode) });
+}
+
+async function adminCreateRedeemCodes(req, res) {
+  if (!requireAdmin(req, res)) return;
+  const payload = await readJson(req);
+  const plan = membershipPlans[payload.planId];
+  const count = Math.max(1, Math.min(50, Number.parseInt(payload.count || "1", 10) || 1));
+  if (!plan || !plan.price) {
+    sendJson(res, 422, { error: "请选择有效套餐" });
+    return;
+  }
+
+  const codes = await readRedeemCodes();
+  const created = [];
+  for (let index = 0; index < count; index += 1) {
+    let nextCode = makeRedeemCode();
+    while (codes.some((item) => item.code === nextCode)) nextCode = makeRedeemCode();
+    const item = {
+      id: randomUUID(),
+      code: nextCode,
+      planId: plan.id,
+      planName: plan.name,
+      amount: plan.price,
+      credits: plan.credits,
+      status: "unused",
+      note: String(payload.note || "").slice(0, 120),
+      createdAtIso: new Date().toISOString(),
+      usedAtIso: "",
+      usedByUserId: "",
+      usedByPhone: "",
+    };
+    codes.unshift(item);
+    created.push(item);
+  }
+  await writeRedeemCodes(codes);
+  sendJson(res, 200, { codes: created.map(publicRedeemCode) });
 }
 
 async function predict(req, res) {
@@ -1328,12 +1486,24 @@ createServer(async (req, res) => {
       await myOrders(req, res);
       return;
     }
+    if (req.method === "POST" && route === "/api/redeem") {
+      await redeemCode(req, res);
+      return;
+    }
     if (req.method === "GET" && route === "/api/admin/orders") {
       await adminOrders(req, res);
       return;
     }
     if (req.method === "POST" && route === "/api/admin/orders/approve") {
       await approveOrder(req, res);
+      return;
+    }
+    if (req.method === "GET" && route === "/api/admin/redeem-codes") {
+      await adminRedeemCodes(req, res);
+      return;
+    }
+    if (req.method === "POST" && route === "/api/admin/redeem-codes") {
+      await adminCreateRedeemCodes(req, res);
       return;
     }
     if (req.method === "GET" && route === "/api/live") {

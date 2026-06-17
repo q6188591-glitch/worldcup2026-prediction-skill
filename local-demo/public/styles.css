@@ -536,12 +536,64 @@ button.secondary:hover {
   background: #eaf7ef;
 }
 
+.pay-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.pay-card {
+  display: grid;
+  gap: 8px;
+  min-height: 132px;
+  padding: 12px;
+  border: 1px solid #dce8e0;
+  border-radius: 8px;
+  background: #f7fbf8;
+}
+
+.pay-card strong {
+  color: #16261d;
+}
+
+.pay-card span {
+  color: #66746b;
+  font-weight: 800;
+}
+
+.pay-summary {
+  align-content: center;
+}
+
+.qr-box {
+  display: grid;
+  place-items: center;
+  min-height: 92px;
+  border: 1px dashed #b9d0c2;
+  border-radius: 8px;
+  color: #66746b;
+  font-weight: 900;
+  background: white;
+}
+
+.qr-box img {
+  width: min(140px, 100%);
+  aspect-ratio: 1;
+  object-fit: contain;
+}
+
 .order-list {
   display: grid;
   gap: 8px;
 }
 
+.code-list {
+  display: grid;
+  gap: 8px;
+}
+
 .order-item,
+.code-item,
 .order-empty {
   display: grid;
   grid-template-columns: 1fr max-content max-content max-content;
@@ -557,6 +609,19 @@ button.secondary:hover {
 
 .order-item strong {
   color: #16261d;
+}
+
+.code-item {
+  grid-template-columns: minmax(180px, max-content) 1fr max-content;
+}
+
+.code-item strong {
+  color: #145a36;
+  letter-spacing: 0;
+}
+
+.code-item.is-used {
+  opacity: 0.66;
 }
 
 .admin-box {
@@ -1002,8 +1067,10 @@ pre {
   .auth-grid,
   .account-head,
   .order-row,
+  .pay-grid,
   .plan-grid,
   .order-item,
+  .code-item,
   .batch-controls,
   .batch-row,
   .memory-controls,
