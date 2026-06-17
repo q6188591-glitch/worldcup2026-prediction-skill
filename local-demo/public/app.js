@@ -52,6 +52,7 @@ const authPhone = document.querySelector("#authPhone");
 const authPassword = document.querySelector("#authPassword");
 const loginButton = document.querySelector("#loginButton");
 const registerButton = document.querySelector("#registerButton");
+const authHint = document.querySelector("#authHint");
 const logoutButton = document.querySelector("#logoutButton");
 const memberArea = document.querySelector("#memberArea");
 const planGrid = document.querySelector("#planGrid");
@@ -59,6 +60,7 @@ const wechatQr = document.querySelector("#wechatQr");
 const alipayQr = document.querySelector("#alipayQr");
 const selectedPlanText = document.querySelector("#selectedPlanText");
 const payeeName = document.querySelector("#payeeName");
+const paymentHint = document.querySelector("#paymentHint");
 const redeemCodeInput = document.querySelector("#redeemCode");
 const redeemButton = document.querySelector("#redeemButton");
 const redeemStatus = document.querySelector("#redeemStatus");
@@ -69,6 +71,8 @@ const adminCodeCount = document.querySelector("#adminCodeCount");
 const adminCodeNote = document.querySelector("#adminCodeNote");
 const generateCodesButton = document.querySelector("#generateCodes");
 const loadAdminOrdersButton = document.querySelector("#loadAdminOrders");
+const copyLatestCodesButton = document.querySelector("#copyLatestCodes");
+const adminStatus = document.querySelector("#adminStatus");
 const adminOrders = document.querySelector("#adminOrders");
 const adminCodes = document.querySelector("#adminCodes");
 const matchRail = document.querySelector("#matchRail");
@@ -96,6 +100,7 @@ let currentUser = null;
 let plans = [];
 let selectedPlanId = "";
 let payment = {};
+let latestGeneratedCodes = [];
 
 function apiPath(path) {
   return `api/${path.replace(/^\//, "")}`;
@@ -205,6 +210,50 @@ function setText(id, value) {
   document.querySelector(id).textContent = value;
 }
 
+function cleanPhone(value) {
+  return String(value || "").replace(/\D/g, "");
+}
+
+function authValidationMessage() {
+  const phone = cleanPhone(authPhone.value);
+  const password = authPassword.value || "";
+  if (!/^1\d{10}$/.test(phone)) return "请输入 11 位手机号。";
+  if (password.length < 6) return "密码至少 6 位。";
+  return "";
+}
+
+function setAuthHint(message = "") {
+  authHint.textContent = message || "手机号用于登录和找回充值记录。";
+}
+
+function planPrice(plan) {
+  const value = Number(plan?.price ?? plan?.amount ?? 0);
+  return value.toFixed(value === 0.01 ? 2 : 1).replace(/\.0$/, "");
+}
+
+function isTestPlan(plan) {
+  return plan?.id === "paytest" || Number(plan?.price) === 0.01;
+}
+
+async function copyText(text) {
+  if (!text) return false;
+  try {
+    await navigator.clipboard.writeText(text);
+    return true;
+  } catch {
+    const textarea = document.createElement("textarea");
+    textarea.value = text;
+    textarea.setAttribute("readonly", "");
+    textarea.style.position = "fixed";
+    textarea.style.left = "-999px";
+    document.body.append(textarea);
+    textarea.select();
+    const ok = document.execCommand("copy");
+    textarea.remove();
+    return ok;
+  }
+}
+
 function accountLabel(user) {
   if (!user) return "未登录";
   return `${user.phone} · 剩余 ${user.predictionCredits ?? user.freePredictionsLeft ?? 0} 次`;
@@ -232,7 +281,11 @@ function renderPlans() {
     const button = document.createElement("button");
     button.type = "button";
     button.className = `plan-card${selectedPlanId === plan.id ? " is-selected" : ""}`;
-    button.innerHTML = `<strong>${plan.name}</strong><span>￥${plan.price}</span><small>${plan.credits} 次预测</small>`;
+    button.innerHTML = `
+      <strong>${plan.name}${isTestPlan(plan) ? `<em>测试</em>` : ""}</strong>
+      <span>￥${planPrice(plan)}</span>
+      <small>${plan.credits} 次预测${isTestPlan(plan) ? " · 跑通后删除" : ""}</small>
+    `;
     button.addEventListener("click", () => {
       selectedPlanId = plan.id;
       renderPlans();
@@ -263,8 +316,13 @@ function renderQr(container, url, label) {
 
 function renderPayment() {
   const plan = selectedPlan();
-  selectedPlanText.textContent = plan ? `${plan.name} · ￥${plan.price} · ${plan.credits} 次` : "请选择次数包";
+  selectedPlanText.textContent = plan ? `当前应付 ￥${planPrice(plan)} · ${plan.name} · ${plan.credits} 次` : "请选择次数包";
   payeeName.textContent = payment.payeeName ? `收款方：${payment.payeeName}` : "";
+  paymentHint.textContent = plan
+    ? isTestPlan(plan)
+      ? "测试专用：付款 0.01 元后生成测试充值码验证流程。"
+      : "扫码付款后，联系管理员获取对应套餐充值码。"
+    : "选择次数包后再扫码付款。";
   renderQr(wechatQr, payment.wechatQrUrl, "微信收款二维码");
   renderQr(alipayQr, payment.alipayQrUrl, "支付宝收款二维码");
 }
@@ -303,11 +361,18 @@ function renderRedeemCodes(codes) {
   for (const code of codes) {
     const row = document.createElement("div");
     row.className = `code-item is-${code.status}`;
+    const statusText = code.status === "used" ? `已使用 · ${code.usedByPhone || "未知用户"}` : "未使用";
     row.innerHTML = `
       <strong>${code.code}</strong>
-      <span>${code.planName} · ￥${code.amount} · ${code.credits} 次</span>
-      <small>${code.status === "used" ? `已用 · ${code.usedByPhone || ""}` : "未使用"} · ${formatTime(code.createdAtIso)}</small>
+      <span>${code.planName} · ￥${planPrice(code)} · ${code.credits} 次${Number(code.amount) === 0.01 ? " · 测试" : ""}</span>
+      <small>${statusText} · ${formatTime(code.createdAtIso)}</small>
+      <button type="button" data-code="${code.code}" ${code.status === "used" ? "disabled" : ""}>复制</button>
     `;
+    const copyButton = row.querySelector("button");
+    copyButton?.addEventListener("click", async () => {
+      const ok = await copyText(code.code);
+      adminStatus.textContent = ok ? `已复制充值码：${code.code}` : "复制失败，请手动选择充值码。";
+    });
     adminCodes.append(row);
   }
   if (!codes.length) adminCodes.innerHTML = `<div class="order-empty">暂无充值码</div>`;
@@ -324,15 +389,29 @@ async function loadAuth() {
 }
 
 async function submitAuth(mode) {
-  const res = await fetch(apiPath(`auth/${mode}`), {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({ phone: authPhone.value, password: authPassword.value }),
-  });
-  const data = await res.json();
-  if (!res.ok) throw new Error(data.error || "账号操作失败");
-  renderAccount(data.user);
-  loadOrders();
+  const validation = authValidationMessage();
+  if (validation) {
+    setAuthHint(validation);
+    return;
+  }
+  loginButton.disabled = true;
+  registerButton.disabled = true;
+  setAuthHint(mode === "login" ? "正在登录..." : "正在注册...");
+  try {
+    const res = await fetch(apiPath(`auth/${mode}`), {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ phone: cleanPhone(authPhone.value), password: authPassword.value }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || "账号操作失败");
+    renderAccount(data.user);
+    setAuthHint("登录成功。");
+    loadOrders();
+  } finally {
+    loginButton.disabled = false;
+    registerButton.disabled = false;
+  }
 }
 
 async function loadOrders() {
@@ -370,6 +449,8 @@ async function redeemCode() {
 }
 
 async function generateRedeemCodes() {
+  adminStatus.textContent = "正在生成充值码...";
+  generateCodesButton.disabled = true;
   const res = await fetch(apiPath("admin/redeem-codes"), {
     method: "POST",
     headers: { "content-type": "application/json", "x-admin-token": adminTokenInput.value },
@@ -380,14 +461,21 @@ async function generateRedeemCodes() {
     }),
   });
   const data = await res.json();
-  if (!res.ok) throw new Error(data.error || "充值码生成失败");
-  renderRedeemCodes(data.codes || []);
+  try {
+    if (!res.ok) throw new Error(data.error || "充值码生成失败");
+    latestGeneratedCodes = data.codes || [];
+    renderRedeemCodes(latestGeneratedCodes);
+    adminStatus.textContent = `已生成 ${latestGeneratedCodes.length} 个充值码，可直接复制发给用户。`;
+  } finally {
+    generateCodesButton.disabled = false;
+  }
 }
 
 async function loadAdminCodes() {
   const res = await fetch(apiPath("admin/redeem-codes"), { headers: { "x-admin-token": adminTokenInput.value } });
   const data = await res.json();
   if (!res.ok) throw new Error(data.error || "充值码读取失败");
+  latestGeneratedCodes = [];
   renderRedeemCodes(data.codes || []);
 }
 
@@ -814,6 +902,15 @@ logoutButton.addEventListener("click", async () => {
 });
 redeemButton.addEventListener("click", redeemCode);
 generateCodesButton.addEventListener("click", () => generateRedeemCodes().catch((error) => { adminCodes.innerHTML = `<div class="order-empty">${error.message}</div>`; }));
+copyLatestCodesButton.addEventListener("click", async () => {
+  const text = latestGeneratedCodes.map((code) => code.code).join("\n");
+  if (!text) {
+    adminStatus.textContent = "没有可复制的本次生成充值码。";
+    return;
+  }
+  const ok = await copyText(text);
+  adminStatus.textContent = ok ? `已复制 ${latestGeneratedCodes.length} 个充值码。` : "复制失败，请手动选择充值码。";
+});
 loadAdminOrdersButton.addEventListener("click", () => {
   loadAdminCodes().catch((error) => { adminCodes.innerHTML = `<div class="order-empty">${error.message}</div>`; });
   loadAdminOrders().catch((error) => { adminOrders.innerHTML = `<div class="order-empty">${error.message}</div>`; });

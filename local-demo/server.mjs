@@ -240,6 +240,10 @@ function normalizePhone(phone) {
   return String(phone || "").replace(/\D/g, "");
 }
 
+function isValidPhone(phone) {
+  return /^1\d{10}$/.test(phone);
+}
+
 function passwordHash(password, salt = randomBytes(16).toString("hex")) {
   const hash = scryptSync(String(password), salt, 32).toString("hex");
   return `${salt}:${hash}`;
@@ -479,8 +483,12 @@ async function register(req, res) {
   const payload = await readJson(req);
   const phone = normalizePhone(payload.phone);
   const password = String(payload.password || "");
-  if (!/^1?\d{10,11}$/.test(phone) || password.length < 6) {
-    sendJson(res, 422, { error: "请输入有效手机号和至少 6 位密码" });
+  if (!isValidPhone(phone)) {
+    sendJson(res, 422, { error: "请输入 11 位手机号" });
+    return;
+  }
+  if (password.length < 6) {
+    sendJson(res, 422, { error: "密码至少 6 位" });
     return;
   }
   const data = await readUsers();
@@ -507,6 +515,10 @@ async function register(req, res) {
 async function login(req, res) {
   const payload = await readJson(req);
   const phone = normalizePhone(payload.phone);
+  if (!isValidPhone(phone)) {
+    sendJson(res, 422, { error: "请输入 11 位手机号" });
+    return;
+  }
   const data = await readUsers();
   const user = data.users.find((item) => item.phone === phone);
   if (!user || !verifyPassword(payload.password, user.passwordHash)) {
