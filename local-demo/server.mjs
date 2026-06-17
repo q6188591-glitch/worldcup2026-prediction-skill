@@ -582,6 +582,43 @@ async function adminOrders(req, res) {
   sendJson(res, 200, { orders: orders.slice(0, 100) });
 }
 
+async function adminOverview(req, res) {
+  if (!requireAdmin(req, res)) return;
+  const [{ users }, orders, codes] = await Promise.all([readUsers(), readOrders(), readRedeemCodes()]);
+  const approvedOrders = orders.filter((order) => order.status === "approved");
+  const todayKey = new Date().toISOString().slice(0, 10);
+  const todayOrders = approvedOrders.filter((order) => String(order.approvedAtIso || order.createdAtIso || "").startsWith(todayKey));
+  const totalRevenue = approvedOrders.reduce((sum, order) => sum + Number(order.amount || 0), 0);
+  const todayRevenue = todayOrders.reduce((sum, order) => sum + Number(order.amount || 0), 0);
+  const totalCredits = users.reduce((sum, user) => sum + Number(user.predictionCredits ?? user.freePredictionsLeft ?? 0), 0);
+  const activeUsers = users
+    .slice()
+    .sort((a, b) => (b.createdAtIso || "").localeCompare(a.createdAtIso || ""))
+    .slice(0, 80)
+    .map((user) => ({
+      id: user.id,
+      phone: user.phone,
+      credits: Number(user.predictionCredits ?? user.freePredictionsLeft ?? 0),
+      planName: user.planName || "",
+      createdAtIso: user.createdAtIso,
+    }));
+  sendJson(res, 200, {
+    plans: Object.values(membershipPlans).filter((plan) => plan.price > 0),
+    payment: publicPaymentConfig(),
+    stats: {
+      users: users.length,
+      totalCredits,
+      approvedOrders: approvedOrders.length,
+      totalRevenue: Number(totalRevenue.toFixed(2)),
+      todayOrders: todayOrders.length,
+      todayRevenue: Number(todayRevenue.toFixed(2)),
+      unusedCodes: codes.filter((code) => code.status !== "used").length,
+      usedCodes: codes.filter((code) => code.status === "used").length,
+    },
+    users: activeUsers,
+  });
+}
+
 async function approveOrder(req, res) {
   if (!requireAdmin(req, res)) return;
   const payload = await readJson(req);
@@ -1450,7 +1487,7 @@ setInterval(() => {
 
 async function serveStatic(req, res) {
   const url = new URL(req.url, `http://${req.headers.host}`);
-  const pathname = url.pathname === "/" ? "/index.html" : decodeURIComponent(url.pathname);
+  const pathname = url.pathname === "/" ? "/index.html" : url.pathname === "/admin" ? "/admin.html" : decodeURIComponent(url.pathname);
   const filePath = path.normalize(path.join(publicDir, pathname));
   if (!filePath.startsWith(publicDir) || !existsSync(filePath)) {
     res.writeHead(404, { "content-type": "text/plain; charset=utf-8" });
@@ -1463,6 +1500,9 @@ async function serveStatic(req, res) {
     ".html": "text/html; charset=utf-8",
     ".css": "text/css; charset=utf-8",
     ".js": "application/javascript; charset=utf-8",
+    ".jpg": "image/jpeg",
+    ".jpeg": "image/jpeg",
+    ".png": "image/png",
   }[ext] || "application/octet-stream";
   res.writeHead(200, { "content-type": contentType });
   res.end(await readFile(filePath));
@@ -1505,6 +1545,10 @@ createServer(async (req, res) => {
     }
     if (req.method === "GET" && route === "/api/admin/orders") {
       await adminOrders(req, res);
+      return;
+    }
+    if (req.method === "GET" && route === "/api/admin/overview") {
+      await adminOverview(req, res);
       return;
     }
     if (req.method === "POST" && route === "/api/admin/orders/approve") {

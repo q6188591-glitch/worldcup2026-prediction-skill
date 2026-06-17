@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>赛场罗盘 26 · 世界杯预测模板</title>
-    <link rel="stylesheet" href="styles.css?v=20260617-auth-topup-polish" />
+    <link rel="stylesheet" href="styles.css?v=20260617-user-admin-center" />
   </head>
   <body>
     <div class="notice">AI 赛前推演模板，仅供球迷讨论与内容创作，不提供投注、赔率或下注建议。</div>
@@ -59,6 +59,20 @@
           <small id="authHint" class="auth-hint">手机号用于登录和找回充值记录。</small>
         </div>
         <div id="memberArea" class="member-area" hidden>
+          <div class="user-center-grid">
+            <div>
+              <span>当前账号</span>
+              <strong id="userCenterPhone">--</strong>
+            </div>
+            <div>
+              <span>剩余次数</span>
+              <strong id="userCenterCredits">--</strong>
+            </div>
+            <div>
+              <span>当前权益</span>
+              <strong id="userCenterPlan">--</strong>
+            </div>
+          </div>
           <div id="planGrid" class="plan-grid"></div>
           <div class="pay-grid">
             <div class="pay-card">
@@ -80,26 +94,8 @@
             <button id="redeemButton" type="button">兑换次数</button>
           </div>
           <div id="redeemStatus" class="batch-status">充值码兑换成功后，次数会自动到账。</div>
+          <div class="user-section-title">我的充值记录</div>
           <div id="orderList" class="order-list"></div>
-          <details class="admin-box">
-            <summary>管理员发码</summary>
-            <div class="order-row">
-              <select id="adminPlan"></select>
-              <input id="adminCodeCount" inputmode="numeric" value="1" />
-            </div>
-            <div class="order-row">
-              <input id="adminToken" type="password" autocomplete="off" placeholder="ADMIN_TOKEN" />
-              <button id="generateCodes" type="button">生成充值码</button>
-            </div>
-            <input id="adminCodeNote" placeholder="备注，例如微信到账/支付宝到账" />
-            <div class="admin-actions">
-              <button id="loadAdminOrders" class="secondary" type="button">读取历史订单</button>
-              <button id="copyLatestCodes" class="secondary" type="button">复制本次生成</button>
-            </div>
-            <div id="adminStatus" class="batch-status">管理员发码后，用户可自行兑换到账。</div>
-            <div id="adminCodes" class="code-list"></div>
-            <div id="adminOrders" class="order-list"></div>
-          </details>
         </div>
       </section>
 
@@ -253,6 +249,6 @@
       </section>
     </main>
 
-    <script src="app.js?v=20260617-auth-topup-polish"></script>
+    <script src="app.js?v=20260617-user-admin-center"></script>
   </body>
 </html>

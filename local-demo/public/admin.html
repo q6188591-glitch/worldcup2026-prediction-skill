@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>赛场罗盘 26 · 管理后台</title>
+    <link rel="stylesheet" href="styles.css?v=20260617-admin-center" />
+  </head>
+  <body class="admin-body">
+    <main class="admin-page">
+      <section class="admin-shell">
+        <div class="admin-title">
+          <div>
+            <span>ADMIN</span>
+            <h1>运营后台</h1>
+          </div>
+          <a href="/">返回网站</a>
+        </div>
+
+        <div class="admin-login">
+          <input id="adminToken" type="password" autocomplete="off" placeholder="ADMIN_TOKEN" />
+          <button id="loadDashboard" type="button">进入后台</button>
+          <small id="adminStatus">输入管理员令牌后读取运营数据。</small>
+        </div>
+
+        <section class="admin-stats" id="adminStats"></section>
+
+        <section class="admin-panel">
+          <div class="admin-panel-head">
+            <h2>生成充值码</h2>
+            <button id="copyLatestCodes" class="secondary" type="button">复制本次生成</button>
+          </div>
+          <div class="admin-form-grid">
+            <select id="adminPlan"></select>
+            <input id="adminCodeCount" inputmode="numeric" value="1" />
+            <input id="adminCodeNote" placeholder="备注，例如微信到账/支付宝到账" />
+            <button id="generateCodes" type="button">生成充值码</button>
+          </div>
+          <div id="adminCodes" class="code-list"></div>
+        </section>
+
+        <section class="admin-grid">
+          <section class="admin-panel">
+            <div class="admin-panel-head">
+              <h2>最近用户</h2>
+            </div>
+            <div id="adminUsers" class="admin-list"></div>
+          </section>
+
+          <section class="admin-panel">
+            <div class="admin-panel-head">
+              <h2>充值记录</h2>
+              <button id="refreshOrders" class="secondary" type="button">刷新</button>
+            </div>
+            <div id="adminOrders" class="order-list"></div>
+          </section>
+        </section>
+      </section>
+    </main>
+    <script src="admin.js?v=20260617-admin-center"></script>
+  </body>
+</html>
