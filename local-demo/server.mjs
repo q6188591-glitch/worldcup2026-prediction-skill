@@ -278,7 +278,7 @@ function memoryForPrompt(memory, teamA, teamB) {
       return `### ${entry.team}\n最近复盘：${entry.summary || "暂无"}\n可复用观察：\n${insights || "- 暂无"}\n风险点：\n${risks || "- 暂无"}`;
     });
   if (!selected.length) return "";
-  return `\n\n## 小组赛复盘记忆\n以下为已收录的球队复盘材料，预测时应作为补充依据；若与实时情报冲突，以实时情报为准。\n\n${selected.join("\n\n")}`;
+  return `\n\n## 小组赛复盘记忆\n以下为已收录的球队复盘材料。生成比分预测时必须纳入同队近期复盘，重点参考攻防暴露点、风险点、连续性表现和样本数量；若与实时情报冲突，以实时情报为准。\n\n${selected.join("\n\n")}`;
 }
 
 async function listModels(req, res) {
@@ -491,6 +491,23 @@ function scoreOutcome(score) {
   return "D";
 }
 
+function scoreMargin(score) {
+  const [a, b] = String(score || "")
+    .split("-")
+    .map((value) => Number.parseInt(value.trim(), 10));
+  return Number.isFinite(a) && Number.isFinite(b) ? a - b : null;
+}
+
+function knockoutNameZh(name) {
+  return String(name || "")
+    .replace(/Group ([A-L]) Winner/g, "$1组第1")
+    .replace(/Group ([A-L]) 2nd Place/g, "$1组第2")
+    .replace(/Third Place Group ([A-L/]+)/g, (_, groups) => `${groups.split("/").join("/")}组第3`)
+    .replace(/Winner/g, "第1")
+    .replace(/2nd Place/g, "第2")
+    .replace(/Third Place/g, "第3");
+}
+
 const teamNameZh = new Map([
   ["Mexico", "墨西哥"],
   ["South Africa", "南非"],
@@ -638,8 +655,8 @@ function normalizeScoreboardEvent(event, savedPredictions = new Map()) {
   const awayName = away.team?.displayName || "";
   const defaultPrediction = predictionRecords.get(`${homeName}|${awayName}`) || predictionRecords.get(`${awayName}|${homeName}`) || {};
   const isDefaultReversed = predictionRecords.has(`${awayName}|${homeName}`);
-  const homeZh = teamNameZh.get(homeName) || homeName;
-  const awayZh = teamNameZh.get(awayName) || awayName;
+  const homeZh = teamNameZh.get(homeName) || knockoutNameZh(homeName);
+  const awayZh = teamNameZh.get(awayName) || knockoutNameZh(awayName);
   const savedDirect = savedPredictions.get(predictionKey(homeZh, awayZh));
   const savedReverse = savedPredictions.get(predictionKey(awayZh, homeZh));
   const savedPrediction = savedDirect || savedReverse;
@@ -773,12 +790,14 @@ function summarizeRecords(records, sourceError = "") {
     ...item,
     outcomeHit: item.predicted ? scoreOutcome(item.predicted) === scoreOutcome(item.actual) : null,
     scoreHit: item.predicted ? item.predicted === item.actual : null,
+    marginHit: item.predicted ? scoreMargin(item.predicted) === scoreMargin(item.actual) : null,
   }));
 
   const scored = normalized.filter((item) => item.outcomeHit !== null && item.scoreHit !== null);
   const total = scored.length;
   const outcomeHits = scored.filter((item) => item.outcomeHit).length;
   const scoreHits = scored.filter((item) => item.scoreHit).length;
+  const marginHits = scored.filter((item) => item.marginHit).length;
   return {
     updatedAtIso: new Date().toISOString(),
     nextRefreshAtIso: new Date(Date.now() + recordsRefreshMs).toISOString(),
@@ -786,6 +805,7 @@ function summarizeRecords(records, sourceError = "") {
     recordCount: normalized.length,
     outcomeHits,
     scoreHits,
+    marginHits,
     sourceError,
     records: normalized,
   };

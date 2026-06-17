@@ -218,6 +218,7 @@ function renderRecords(data) {
   const total = data?.total ?? records.length;
   const outcomeHits = data?.outcomeHits ?? records.filter((item) => item.outcomeHit).length;
   const scoreHits = data?.scoreHits ?? records.filter((item) => item.scoreHit).length;
+  const marginHits = data?.marginHits ?? records.filter((item) => item.marginHit).length;
 
   recordStats.innerHTML = `
     <div>
@@ -227,6 +228,10 @@ function renderRecords(data) {
     <div>
       <strong>${percent(outcomeHits, total)}</strong>
       <span>赛果方向 ${outcomeHits}/${total}</span>
+    </div>
+    <div>
+      <strong>${percent(marginHits, total)}</strong>
+      <span>净胜球 ${marginHits}/${total}</span>
     </div>
     <div>
       <strong>${percent(scoreHits, total)}</strong>
@@ -245,6 +250,7 @@ function renderRecords(data) {
       <b>预测 ${item.predicted ?? "未记录"}</b>
       <b>实际 ${item.actual}</b>
       <mark>${isUntracked ? "未纳入统计" : item.outcomeHit ? "赛果命中" : "赛果未中"}</mark>
+      <mark>${isUntracked ? "未纳入统计" : item.marginHit ? "净胜命中" : "净胜未中"}</mark>
       <mark>${isUntracked ? (item.note || "仅赛果记录") : item.scoreHit ? "比分命中" : "比分未中"}</mark>
     `;
     recordList.append(row);
@@ -320,20 +326,23 @@ function renderMemory(memory) {
     : "暂无复盘记忆，点击采集后开始收录。";
   memoryGrid.innerHTML = "";
   for (const entry of entries) {
-    const card = document.createElement("article");
+    const card = document.createElement("details");
     card.className = "memory-card";
     const insights = (entry.insights || []).slice(0, 3).map((item) => `<li>${item}</li>`).join("");
     const risks = (entry.risks || []).slice(0, 2).map((item) => `<li>${item}</li>`).join("");
     card.innerHTML = `
-      <header>
+      <summary>
         <strong>${flag(entry.team)} ${entry.team}</strong>
         <span>${entry.matchCount || 0} 场样本 · ${entry.sourceCount || 0} 条线索</span>
-      </header>
-      <p>${entry.summary || "暂无摘要"}</p>
-      <b>可复用观察</b>
-      <ul>${insights || "<li>暂无</li>"}</ul>
-      <b>风险点</b>
-      <ul>${risks || "<li>暂无</li>"}</ul>
+        <small>${formatTime(entry.updatedAtIso)}</small>
+      </summary>
+      <div class="memory-detail">
+        <p>${entry.summary || "暂无摘要"}</p>
+        <b>可复用观察</b>
+        <ul>${insights || "<li>暂无</li>"}</ul>
+        <b>风险点</b>
+        <ul>${risks || "<li>暂无</li>"}</ul>
+      </div>
     `;
     memoryGrid.append(card);
   }
