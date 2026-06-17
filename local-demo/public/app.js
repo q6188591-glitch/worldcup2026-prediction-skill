@@ -111,16 +111,23 @@ function matchStartAt(match) {
   return new Date(2026, month - 1, day, hour, minute);
 }
 
-function isPredictableMatch(match) {
-  if (match.status === "FT") return false;
-  const startAt = matchStartAt(match);
-  return !startAt || startAt > new Date();
+function matchTimeValue(match) {
+  return matchStartAt(match)?.getTime() ?? Number.MAX_SAFE_INTEGER;
 }
 
-function isWithinNextDays(match, days) {
+function isPredictableMatch(match) {
+  return match.status !== "FT";
+}
+
+function scheduleAnchorDate(matches = schedule) {
+  const starts = matches.map(matchStartAt).filter(Boolean).sort((a, b) => a - b);
+  return starts[0] || new Date();
+}
+
+function isWithinNextDays(match, days, anchor = scheduleAnchorDate()) {
   const startAt = matchStartAt(match);
   if (!startAt) return true;
-  const endAt = new Date();
+  const endAt = new Date(anchor);
   endAt.setDate(endAt.getDate() + days);
   return startAt <= endAt;
 }
@@ -130,7 +137,7 @@ function stageForMatch(match) {
 }
 
 function addBatchDateOptions() {
-  const availableMatches = schedule.filter(isPredictableMatch);
+  const availableMatches = schedule.filter(isPredictableMatch).sort((a, b) => matchTimeValue(a) - matchTimeValue(b));
   const days = [...new Set(availableMatches.map((match) => matchDay(match.date)))];
   batchDateSelect.innerHTML = "";
   for (const day of days) {
@@ -309,7 +316,8 @@ function selectMatch(match) {
 
 function renderSchedule() {
   matchRail.innerHTML = "";
-  const upcoming = schedule.filter(isPredictableMatch).slice(0, 4);
+  const futureMatches = schedule.filter(isPredictableMatch).sort((a, b) => matchTimeValue(a) - matchTimeValue(b));
+  const upcoming = futureMatches.slice(0, 4);
   upcoming.forEach((match, index) => {
     const button = document.createElement("button");
     button.type = "button";
@@ -326,9 +334,9 @@ function renderSchedule() {
   });
 
   scheduleGrid.innerHTML = "";
-  const futureMatches = schedule.filter(isPredictableMatch);
-  const nearMatches = futureMatches.filter((match) => isWithinNextDays(match, 3));
-  const laterMatches = futureMatches.filter((match) => !isWithinNextDays(match, 3));
+  const anchor = scheduleAnchorDate(futureMatches);
+  const nearMatches = futureMatches.filter((match) => isWithinNextDays(match, 3, anchor));
+  const laterMatches = futureMatches.filter((match) => !isWithinNextDays(match, 3, anchor));
   const visibleMatches = nearMatches.length ? nearMatches : futureMatches;
   const appendRow = (match, container = scheduleGrid) => {
     const row = document.createElement("button");
