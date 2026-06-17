@@ -645,6 +645,13 @@ function beijingDateLabel(value) {
   return `${Number(pick("month"))}/${Number(pick("day"))} ${pick("hour")}:${pick("minute")}`;
 }
 
+function matchDateValue(value) {
+  const match = String(value || "").match(/^(\d{1,2})\/(\d{1,2})(?:\s+(\d{1,2}):(\d{2}))?/);
+  if (!match) return 0;
+  const [, month, day, hour = "0", minute = "0"] = match;
+  return new Date(2026, Number(month) - 1, Number(day), Number(hour), Number(minute)).getTime();
+}
+
 function normalizeScoreboardEvent(event, savedPredictions = new Map()) {
   const competition = event.competitions?.[0];
   if (!competition) return null;
@@ -698,6 +705,7 @@ async function fetchCompletedScoreboardRecords(savedPredictions = new Map()) {
       if (!normalized) continue;
       records.push({
         group: normalized.group === "赛程" ? "赛果" : normalized.group,
+        date: normalized.date,
         teamA: normalized.teamA,
         teamB: normalized.teamB,
         predicted: normalized.predicted,
@@ -786,12 +794,14 @@ function mergeCompletedRecords(primaryRecords, localRecords, savedPredictions = 
 }
 
 function summarizeRecords(records, sourceError = "") {
-  const normalized = records.map((item) => ({
-    ...item,
-    outcomeHit: item.predicted ? scoreOutcome(item.predicted) === scoreOutcome(item.actual) : null,
-    scoreHit: item.predicted ? item.predicted === item.actual : null,
-    marginHit: item.predicted ? scoreMargin(item.predicted) === scoreMargin(item.actual) : null,
-  }));
+  const normalized = records
+    .map((item) => ({
+      ...item,
+      outcomeHit: item.predicted ? scoreOutcome(item.predicted) === scoreOutcome(item.actual) : null,
+      scoreHit: item.predicted ? item.predicted === item.actual : null,
+      marginHit: item.predicted ? scoreMargin(item.predicted) === scoreMargin(item.actual) : null,
+    }))
+    .sort((a, b) => matchDateValue(b.date) - matchDateValue(a.date));
 
   const scored = normalized.filter((item) => item.outcomeHit !== null && item.scoreHit !== null);
   const total = scored.length;
@@ -838,7 +848,7 @@ function teamArticles(team, items) {
 }
 
 function fallbackTeamReview(team, matches, articles) {
-  const matchText = matches.map((item) => `${item.teamA} ${item.actual} ${item.teamB}`).join("；") || "暂无已完赛记录";
+  const matchText = matches.map((item) => `${item.date || "时间未知"} ${item.teamA} ${item.actual} ${item.teamB}`).join("；") || "暂无已完赛记录";
   const articleText = articles.map((item) => item.title).slice(0, 3).join("；") || "暂无相关新闻标题";
   return {
     team,
@@ -853,7 +863,7 @@ function fallbackTeamReview(team, matches, articles) {
 
 async function buildTeamReview(team, matches, articles) {
   if (!primaryProvider.apiKey) return fallbackTeamReview(team, matches, articles);
-  const matchText = matches.map((item) => `${item.group} ${item.teamA} vs ${item.teamB} actual=${item.actual} predicted=${item.predicted || "未记录"}`).join("\n");
+  const matchText = matches.map((item) => `${item.date || "时间未知"} ${item.group} ${item.teamA} vs ${item.teamB} actual=${item.actual} predicted=${item.predicted || "未记录"}`).join("\n");
   const newsText = articles.map((item, index) => `${index + 1}. ${item.title} | ${item.source} | ${item.pubDate}`).join("\n");
   try {
     const content = await withTimeout(
@@ -902,14 +912,15 @@ async function refreshMemory(req, res) {
   } catch {
     reviewItems = [];
   }
-  const teams = (payload.team
+  const recentRecords = [...recordsData.records].sort((a, b) => matchDateValue(b.date) - matchDateValue(a.date));
+  const teams = payload.team
     ? [payload.team]
-    : [...new Set(recordsData.records.flatMap((item) => [item.teamA, item.teamB]))]).slice(0, 4);
+    : [...new Set(recentRecords.flatMap((item) => [item.teamA, item.teamB]))].slice(0, 8);
   const memory = await readTeamMemory();
   memory.teams ||= {};
   memory.updatedAtIso = new Date().toISOString();
   memory.sources = reviewSourceUrls;
-  memory.lastBatch = { teams, limit: 4, updatedAtIso: memory.updatedAtIso };
+  memory.lastBatch = { teams, limit: payload.team ? 1 : 8, strategy: "recent completed first", updatedAtIso: memory.updatedAtIso };
 
   for (const team of teams) {
     const matches = recordsData.records.filter((item) => item.teamA === team || item.teamB === team);

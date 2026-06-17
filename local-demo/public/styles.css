@@ -673,6 +673,50 @@ pre {
   gap: 10px;
 }
 
+.schedule-more {
+  border: 1px solid #dbe7df;
+  border-radius: 8px;
+  background: #f8fbf9;
+  overflow: hidden;
+}
+
+.schedule-more summary {
+  min-height: 54px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 14px;
+  cursor: pointer;
+  color: #145a36;
+  font-weight: 900;
+  list-style: none;
+}
+
+.schedule-more summary::-webkit-details-marker {
+  display: none;
+}
+
+.schedule-more summary::after {
+  content: "+";
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 999px;
+  background: #145a36;
+  color: #fff;
+}
+
+.schedule-more[open] summary::after {
+  content: "-";
+}
+
+.schedule-more-list {
+  display: grid;
+  gap: 10px;
+  padding: 0 10px 10px;
+}
+
 .schedule-row {
   min-height: 58px;
   display: grid;

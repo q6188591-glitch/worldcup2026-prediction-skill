@@ -98,6 +98,14 @@ function isPredictableMatch(match) {
   return !startAt || startAt > new Date();
 }
 
+function isWithinNextDays(match, days) {
+  const startAt = matchStartAt(match);
+  if (!startAt) return true;
+  const endAt = new Date();
+  endAt.setDate(endAt.getDate() + days);
+  return startAt <= endAt;
+}
+
 function stageForMatch(match) {
   return match.label?.split("·")[0]?.trim() || "小组赛";
 }
@@ -186,7 +194,11 @@ function renderSchedule() {
   });
 
   scheduleGrid.innerHTML = "";
-  schedule.forEach((match) => {
+  const futureMatches = schedule.filter(isPredictableMatch);
+  const nearMatches = futureMatches.filter((match) => isWithinNextDays(match, 3));
+  const laterMatches = futureMatches.filter((match) => !isWithinNextDays(match, 3));
+  const visibleMatches = nearMatches.length ? nearMatches : futureMatches;
+  const appendRow = (match, container = scheduleGrid) => {
     const row = document.createElement("button");
     row.type = "button";
     row.className = "schedule-row";
@@ -197,8 +209,19 @@ function renderSchedule() {
       <small>${match.label}</small>
     `;
     row.addEventListener("click", () => selectMatch(match));
-    scheduleGrid.append(row);
-  });
+    container.append(row);
+  };
+  visibleMatches.forEach((match) => appendRow(match));
+  if (laterMatches.length && nearMatches.length) {
+    const group = document.createElement("details");
+    group.className = "schedule-more";
+    group.innerHTML = `<summary>展开 3 天后的赛程 · ${laterMatches.length} 场</summary>`;
+    const list = document.createElement("div");
+    list.className = "schedule-more-list";
+    laterMatches.forEach((match) => appendRow(match, list));
+    group.append(list);
+    scheduleGrid.append(group);
+  }
 }
 
 function setPredicting(active) {
