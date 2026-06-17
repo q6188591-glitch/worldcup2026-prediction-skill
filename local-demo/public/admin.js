@@ -2,6 +2,7 @@ const adminTokenInput = document.querySelector("#adminToken");
 const loadDashboardButton = document.querySelector("#loadDashboard");
 const adminStatus = document.querySelector("#adminStatus");
 const adminStats = document.querySelector("#adminStats");
+const topPlans = document.querySelector("#topPlans");
 const adminPlanSelect = document.querySelector("#adminPlan");
 const adminCodeCount = document.querySelector("#adminCodeCount");
 const adminCodeNote = document.querySelector("#adminCodeNote");
@@ -61,12 +62,33 @@ function renderStats(stats = {}) {
   const items = [
     ["用户数", stats.users ?? 0],
     ["总余额次数", stats.totalCredits ?? 0],
+    ["今日预测", stats.todayPredictions ?? 0],
+    ["今日活跃", stats.todayPredictionUsers ?? 0],
+    ["累计预测", stats.predictionTotal ?? 0],
+    ["预测消耗", stats.predictionCreditsUsed ?? 0],
     ["今日收入", `￥${price(stats.todayRevenue)}`],
     ["累计收入", `￥${price(stats.totalRevenue)}`],
+    ["付费用户", stats.paidUsers ?? 0],
+    ["转化率", `${stats.conversionRate ?? 0}%`],
     ["未用充值码", stats.unusedCodes ?? 0],
     ["已用充值码", stats.usedCodes ?? 0],
   ];
   adminStats.innerHTML = items.map(([label, value]) => `<div><strong>${value}</strong><span>${label}</span></div>`).join("");
+}
+
+function renderTopPlans(items = []) {
+  topPlans.innerHTML = "";
+  for (const item of items) {
+    const row = document.createElement("div");
+    row.className = "admin-user-row";
+    row.innerHTML = `
+      <strong>${item.planName}</strong>
+      <span>${item.count} 单</span>
+      <small>￥${price(item.revenue)}</small>
+    `;
+    topPlans.append(row);
+  }
+  if (!items.length) topPlans.innerHTML = `<div class="order-empty">暂无销售数据</div>`;
 }
 
 function renderPlanOptions() {
@@ -135,6 +157,7 @@ async function loadOverview() {
   if (!res.ok) throw new Error(data.error || "后台数据读取失败");
   plans = data.plans || [];
   renderStats(data.stats);
+  renderTopPlans(data.topPlans || []);
   renderPlanOptions();
   renderUsers(data.users || []);
   adminStatus.textContent = "后台数据已更新。";

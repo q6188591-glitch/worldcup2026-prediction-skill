@@ -10,6 +10,7 @@ const repoRoot = path.resolve(__dirname, "..");
 const publicDir = path.join(__dirname, "public");
 const dataDir = path.join(__dirname, "data");
 const predictionsPath = path.join(dataDir, "predictions.json");
+const userPredictionsPath = path.join(dataDir, "user-predictions.json");
 const memoryPath = path.join(dataDir, "team-memory.json");
 const usersPath = path.join(dataDir, "users.json");
 const ordersPath = path.join(dataDir, "orders.json");
@@ -197,7 +198,7 @@ function selectedProviderHeaders(selected) {
 
 async function readJsonFile(filePath, fallback) {
   try {
-    return JSON.parse(await readFile(filePath, "utf8"));
+    return JSON.parse((await readFile(filePath, "utf8")).replace(/^\uFEFF/, ""));
   } catch (error) {
     if (error.code === "ENOENT") return fallback;
     throw error;
@@ -226,6 +227,17 @@ async function readOrders() {
 
 async function writeOrders(orders) {
   await writeJsonFile(ordersPath, orders);
+}
+
+async function readUserPredictions() {
+  const data = await readJsonFile(userPredictionsPath, []);
+  if (Array.isArray(data)) return data;
+  if (data && typeof data === "object") return [data];
+  return [];
+}
+
+async function writeUserPredictions(items) {
+  await writeJsonFile(userPredictionsPath, items);
 }
 
 async function readRedeemCodes() {
@@ -432,6 +444,42 @@ async function savePredictionSnapshot(payload, result) {
   await writeFile(predictionsPath, `${JSON.stringify([...saved.values()], null, 2)}\n`, "utf8");
 }
 
+async function saveUserPrediction(user, payload, result) {
+  if (!user?.id || !result?.predictedScore || !payload.teamA || !payload.teamB) return;
+  const items = await readUserPredictions();
+  const item = {
+    id: randomUUID(),
+    userId: user.id,
+    phone: user.phone,
+    teamA: payload.teamA,
+    teamB: payload.teamB,
+    group: payload.group || "",
+    date: payload.date || "",
+    stage: payload.stage || "小组赛",
+    predicted: result.predictedScore,
+    confidence: result.confidence || "",
+    creditsUsed: 1,
+    createdAtIso: new Date().toISOString(),
+  };
+  items.unshift(item);
+  await writeUserPredictions(items.slice(0, 5000));
+}
+
+function publicUserPrediction(item) {
+  return {
+    id: item.id,
+    teamA: item.teamA,
+    teamB: item.teamB,
+    group: item.group || "",
+    date: item.date || "",
+    stage: item.stage || "",
+    predicted: item.predicted,
+    confidence: item.confidence || "",
+    creditsUsed: Number(item.creditsUsed || 1),
+    createdAtIso: item.createdAtIso,
+  };
+}
+
 function memoryForPrompt(memory, teamA, teamB) {
   const teams = memory?.teams || {};
   const selected = [teamA, teamB]
@@ -576,6 +624,19 @@ async function myOrders(req, res) {
   sendJson(res, 200, { orders: orders.filter((order) => order.userId === user.id).slice(0, 20) });
 }
 
+async function myPredictions(req, res) {
+  const user = await requireUser(req, res);
+  if (!user) return;
+  const items = await readUserPredictions();
+  const own = items.filter((item) => item.userId === user.id);
+  const totalCreditsUsed = own.reduce((sum, item) => sum + Number(item.creditsUsed || 1), 0);
+  sendJson(res, 200, {
+    total: own.length,
+    totalCreditsUsed,
+    predictions: own.slice(0, 60).map(publicUserPrediction),
+  });
+}
+
 async function adminOrders(req, res) {
   if (!requireAdmin(req, res)) return;
   const orders = await readOrders();
@@ -584,13 +645,28 @@ async function adminOrders(req, res) {
 
 async function adminOverview(req, res) {
   if (!requireAdmin(req, res)) return;
-  const [{ users }, orders, codes] = await Promise.all([readUsers(), readOrders(), readRedeemCodes()]);
+  const [{ users }, orders, codes, userPredictions] = await Promise.all([readUsers(), readOrders(), readRedeemCodes(), readUserPredictions()]);
   const approvedOrders = orders.filter((order) => order.status === "approved");
   const todayKey = new Date().toISOString().slice(0, 10);
   const todayOrders = approvedOrders.filter((order) => String(order.approvedAtIso || order.createdAtIso || "").startsWith(todayKey));
+  const todayPredictions = userPredictions.filter((item) => String(item.createdAtIso || "").startsWith(todayKey));
   const totalRevenue = approvedOrders.reduce((sum, order) => sum + Number(order.amount || 0), 0);
   const todayRevenue = todayOrders.reduce((sum, order) => sum + Number(order.amount || 0), 0);
   const totalCredits = users.reduce((sum, user) => sum + Number(user.predictionCredits ?? user.freePredictionsLeft ?? 0), 0);
+  const paidUserIds = new Set(approvedOrders.map((order) => order.userId).filter(Boolean));
+  const todayPredictionUsers = new Set(todayPredictions.map((item) => item.userId).filter(Boolean));
+  const planSales = approvedOrders.reduce((map, order) => {
+    const key = order.planName || order.planId || "未知套餐";
+    const current = map.get(key) || { planName: key, count: 0, revenue: 0 };
+    current.count += 1;
+    current.revenue += Number(order.amount || 0);
+    map.set(key, current);
+    return map;
+  }, new Map());
+  const topPlans = [...planSales.values()]
+    .sort((a, b) => b.count - a.count || b.revenue - a.revenue)
+    .slice(0, 5)
+    .map((item) => ({ ...item, revenue: Number(item.revenue.toFixed(2)) }));
   const activeUsers = users
     .slice()
     .sort((a, b) => (b.createdAtIso || "").localeCompare(a.createdAtIso || ""))
@@ -612,10 +688,17 @@ async function adminOverview(req, res) {
       totalRevenue: Number(totalRevenue.toFixed(2)),
       todayOrders: todayOrders.length,
       todayRevenue: Number(todayRevenue.toFixed(2)),
+      predictionTotal: userPredictions.length,
+      predictionCreditsUsed: userPredictions.reduce((sum, item) => sum + Number(item.creditsUsed || 1), 0),
+      todayPredictions: todayPredictions.length,
+      todayPredictionUsers: todayPredictionUsers.size,
+      paidUsers: paidUserIds.size,
+      conversionRate: users.length ? Math.round((paidUserIds.size / users.length) * 100) : 0,
       unusedCodes: codes.filter((code) => code.status !== "used").length,
       usedCodes: codes.filter((code) => code.status === "used").length,
     },
     users: activeUsers,
+    topPlans,
   });
 }
 
@@ -798,6 +881,7 @@ async function predict(req, res) {
     });
     const result = JSON.parse(content);
     await savePredictionSnapshot(payload, result);
+    await saveUserPrediction(account, payload, result);
     const updatedUser = await consumePredictionQuota(account.id);
     sendJson(res, 200, { ...result, user: publicUser(updatedUser || account) }, selectedProviderHeaders(selected));
   } catch (error) {
@@ -818,6 +902,7 @@ async function predict(req, res) {
         });
         const result = JSON.parse(content);
         await savePredictionSnapshot(payload, result);
+        await saveUserPrediction(account, payload, result);
         const updatedUser = await consumePredictionQuota(account.id);
         sendJson(res, 200, { ...result, user: publicUser(updatedUser || account) }, selectedProviderHeaders(selected));
         return;
@@ -1537,6 +1622,10 @@ createServer(async (req, res) => {
     }
     if (req.method === "GET" && route === "/api/orders") {
       await myOrders(req, res);
+      return;
+    }
+    if (req.method === "GET" && route === "/api/my/predictions") {
+      await myPredictions(req, res);
       return;
     }
     if (req.method === "POST" && route === "/api/redeem") {

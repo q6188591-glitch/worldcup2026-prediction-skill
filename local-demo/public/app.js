@@ -68,6 +68,8 @@ const redeemCodeInput = document.querySelector("#redeemCode");
 const redeemButton = document.querySelector("#redeemButton");
 const redeemStatus = document.querySelector("#redeemStatus");
 const orderList = document.querySelector("#orderList");
+const myPredictionStats = document.querySelector("#myPredictionStats");
+const myPredictionList = document.querySelector("#myPredictionList");
 const matchRail = document.querySelector("#matchRail");
 const scheduleGrid = document.querySelector("#scheduleGrid");
 const recordStats = document.querySelector("#recordStats");
@@ -320,6 +322,26 @@ function renderOrders(container, orders) {
   if (!orders.length) container.innerHTML = `<div class="order-empty">暂无订单</div>`;
 }
 
+function renderMyPredictions(data) {
+  const predictions = data?.predictions || [];
+  myPredictionStats.textContent = predictions.length
+    ? `已记录 ${data.total || predictions.length} 场预测，累计消耗 ${data.totalCreditsUsed || predictions.length} 次。`
+    : "暂无预测记录。";
+  myPredictionList.innerHTML = "";
+  for (const item of predictions) {
+    const row = document.createElement("div");
+    row.className = "prediction-history-row";
+    row.innerHTML = `
+      <strong>${flag(item.teamA)} ${item.teamA} <em>vs</em> ${flag(item.teamB)} ${item.teamB}</strong>
+      <span>${item.group || item.stage || "比赛"} · ${item.date || formatTime(item.createdAtIso)}</span>
+      <b>预测 ${item.predicted}</b>
+      <small>${item.confidence || ""} · 消耗 ${item.creditsUsed || 1} 次</small>
+    `;
+    myPredictionList.append(row);
+  }
+  if (!predictions.length) myPredictionList.innerHTML = `<div class="order-empty">暂无预测记录</div>`;
+}
+
 async function loadAuth() {
   const res = await fetch(apiPath("auth/me"));
   const data = await res.json();
@@ -327,7 +349,10 @@ async function loadAuth() {
   payment = data.payment || {};
   selectedPlanId ||= plans[0]?.id || "";
   renderAccount(data.user);
-  if (data.user) loadOrders();
+  if (data.user) {
+    loadOrders();
+    loadMyPredictions();
+  }
 }
 
 async function submitAuth(mode) {
@@ -350,6 +375,7 @@ async function submitAuth(mode) {
     renderAccount(data.user);
     setAuthHint("登录成功。");
     loadOrders();
+    loadMyPredictions();
   } finally {
     loginButton.disabled = false;
     registerButton.disabled = false;
@@ -361,6 +387,13 @@ async function loadOrders() {
   const res = await fetch(apiPath("orders"));
   const data = await res.json();
   if (res.ok) renderOrders(orderList, data.orders || []);
+}
+
+async function loadMyPredictions() {
+  if (!currentUser) return;
+  const res = await fetch(apiPath("my/predictions"));
+  const data = await res.json();
+  if (res.ok) renderMyPredictions(data);
 }
 
 async function redeemCode() {
@@ -383,6 +416,7 @@ async function redeemCode() {
     renderAccount(data.user);
     redeemStatus.textContent = `兑换成功：${data.order.planName}，已到账 ${data.order.credits} 次。`;
     loadOrders();
+    loadMyPredictions();
   } catch (error) {
     redeemStatus.textContent = error.message;
   } finally {
@@ -737,6 +771,7 @@ async function runBatchPrediction() {
       renderBatchRow(match, "done", data);
       renderPrediction(data);
       if (data.user) renderAccount(data.user);
+      loadMyPredictions();
     } catch (error) {
       renderBatchRow(match, "error", error.message);
     }
@@ -747,6 +782,7 @@ async function runBatchPrediction() {
   batchPredictButton.disabled = false;
   batchDateSelect.disabled = false;
   loadRecords();
+  loadMyPredictions();
 }
 
 form.addEventListener("submit", async (event) => {
@@ -773,6 +809,7 @@ form.addEventListener("submit", async (event) => {
     if (requestId !== predictRequestId) return;
     renderPrediction(data);
     if (data.user) renderAccount(data.user);
+    loadMyPredictions();
     activeBaseLabel.textContent = "预测完成";
   } catch (error) {
     if (requestId === predictRequestId) activeBaseLabel.textContent = error.message;

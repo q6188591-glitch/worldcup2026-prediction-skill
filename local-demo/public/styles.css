@@ -644,6 +644,40 @@ button.secondary:hover {
   gap: 8px;
 }
 
+.prediction-history {
+  display: grid;
+  gap: 8px;
+}
+
+.prediction-history-row {
+  display: grid;
+  grid-template-columns: 1fr max-content max-content max-content;
+  gap: 10px;
+  align-items: center;
+  min-height: 44px;
+  padding: 10px 12px;
+  border: 1px solid #dce8e0;
+  border-radius: 8px;
+  background: #f7fbf8;
+}
+
+.prediction-history-row strong {
+  color: #16261d;
+}
+
+.prediction-history-row em {
+  color: #d6a300;
+  font-style: normal;
+}
+
+.prediction-history-row span,
+.prediction-history-row b,
+.prediction-history-row small {
+  color: #66746b;
+  font-size: 13px;
+  font-weight: 800;
+}
+
 .code-list {
   display: grid;
   gap: 8px;
@@ -1266,6 +1300,7 @@ pre {
   .plan-grid,
   .order-item,
   .code-item,
+  .prediction-history-row,
   .batch-controls,
   .batch-row,
   .memory-controls,
