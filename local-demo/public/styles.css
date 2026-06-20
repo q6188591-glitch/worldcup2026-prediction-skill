@@ -1518,13 +1518,399 @@ pre {
 }
 
 @media (max-width: 640px) {
+  html,
+  body {
+    max-width: 100%;
+    overflow-x: hidden;
+  }
+
+  body {
+    background-attachment: scroll;
+  }
+
+  .notice {
+    padding: 8px 10px;
+    font-size: 12px;
+    line-height: 1.45;
+  }
+
   .page {
-    width: min(100% - 20px, 1280px);
+    width: 100%;
+    padding: 12px 10px 20px;
   }
 
   .hero {
-    min-height: 360px;
-    padding-top: 18px;
+    min-height: 0;
+    gap: 16px;
+    padding: 18px 0 14px;
+  }
+
+  .hero-copy {
+    max-width: none;
+  }
+
+  h1 {
+    font-size: 44px;
+    line-height: 1.04;
+  }
+
+  .eyebrow {
+    margin-bottom: 8px;
+    font-size: 11px;
+  }
+
+  .lead {
+    margin-top: 12px;
+    font-size: 15px;
+    line-height: 1.6;
+  }
+
+  .hero-meta {
+    gap: 6px;
+    margin-top: 14px;
+  }
+
+  .hero-meta span {
+    padding: 6px 9px;
+    font-size: 12px;
+  }
+
+  .quick-card {
+    padding: 14px;
+  }
+
+  .quick-card strong {
+    margin-top: 6px;
+    font-size: 21px;
+  }
+
+  .quick-card p {
+    margin-top: 7px;
+    font-size: 14px;
+  }
+
+  .toolbar,
+  .live-panel,
+  .account-panel,
+  .panel,
+  .admin-login,
+  .admin-panel {
+    padding: 12px;
+  }
+
+  .toolbar,
+  .live-panel,
+  .account-panel {
+    margin-bottom: 12px;
+  }
+
+  .layout,
+  .admin-shell {
+    gap: 12px;
+  }
+
+  .panel:hover,
+  .match-card:hover,
+  .schedule-row:hover,
+  .record-row:hover,
+  button:hover {
+    transform: none;
+  }
+
+  .section-title,
+  .section-head {
+    gap: 9px;
+    margin-bottom: 12px;
+  }
+
+  .section-title span {
+    width: 32px;
+    height: 32px;
+  }
+
+  h2 {
+    font-size: 20px;
+  }
+
+  label {
+    margin-bottom: 0;
+  }
+
+  input,
+  select,
+  textarea,
+  button {
+    min-width: 0;
+  }
+
+  input,
+  select,
+  button {
+    min-height: 44px;
+  }
+
+  .auth-grid button,
+  .account-head button,
+  .batch-controls button,
+  .memory-controls button,
+  .order-row button,
+  .admin-login button,
+  .admin-form-grid button {
+    width: 100%;
+  }
+
+  .account-head small,
+  .auth-hint,
+  .batch-status,
+  .analysis,
+  .disclaimer p {
+    line-height: 1.6;
+  }
+
+  .match-card {
+    min-height: 116px;
+    padding: 12px;
+  }
+
+  .match-card strong {
+    font-size: 16px;
+    overflow-wrap: anywhere;
+  }
+
+  .versus {
+    min-height: 36px;
+  }
+
+  .user-center-grid div,
+  .admin-stats div {
+    min-height: 68px;
+    padding: 10px;
+  }
+
+  .user-center-grid strong,
+  .admin-stats strong {
+    font-size: 21px;
+    overflow-wrap: anywhere;
+  }
+
+  .user-history-section summary {
+    min-height: 48px;
+    padding: 10px;
+  }
+
+  .user-history-section summary strong,
+  .user-history-section summary span {
+    min-width: 0;
+    overflow-wrap: anywhere;
+  }
+
+  .user-history-section > .order-list,
+  .user-history-section > .prediction-history,
+  .user-history-section > .batch-status {
+    margin: 8px;
+  }
+
+  .plan-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+  }
+
+  .plan-card {
+    min-height: 82px;
+    padding: 10px;
+  }
+
+  .plan-card span {
+    font-size: 19px;
+  }
+
+  .pay-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+  }
+
+  .pay-card {
+    min-height: 96px;
+    padding: 10px;
+  }
+
+  .pay-summary {
+    grid-column: 1 / -1;
+    min-height: 78px;
+  }
+
+  .payment-proof-form {
+    gap: 8px;
+  }
+
+  .paid-confirm-button {
+    min-height: 52px;
+    font-size: 17px;
+  }
+
+  .proof-upload {
+    width: 100%;
+  }
+
+  .prob-grid {
+    grid-template-columns: 1fr 0.8fr 1fr;
+    gap: 6px;
+  }
+
+  .prob-grid > div {
+    gap: 4px;
+    padding: 10px 6px;
+    text-align: center;
+  }
+
+  .prob-grid span {
+    font-size: 12px;
+  }
+
+  .prob-grid strong {
+    font-size: 28px;
+  }
+
+  .result-meta {
+    grid-template-columns: 1fr 1fr;
+    margin: 12px 0;
+    padding: 10px 0;
+  }
+
+  .schedule-row,
+  .batch-row,
+  .record-row,
+  .prediction-history-row,
+  .order-item,
+  .admin-order-item,
+  .code-item,
+  .admin-user-row {
+    gap: 7px;
+    min-width: 0;
+    min-height: 0;
+    padding: 10px;
+  }
+
+  .schedule-row > *,
+  .batch-row > *,
+  .record-row > *,
+  .prediction-history-row > *,
+  .order-item > *,
+  .admin-order-item > *,
+  .code-item > *,
+  .admin-user-row > * {
+    min-width: 0;
+    overflow-wrap: anywhere;
+    word-break: break-word;
+  }
+
+  .schedule-more summary {
+    min-height: 48px;
+    padding: 0 10px;
+  }
+
+  .record-stats {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+  }
+
+  .record-stats div {
+    min-height: 88px;
+    gap: 6px;
+  }
+
+  .record-stats strong {
+    font-size: 34px;
+  }
+
+  .record-row mark {
+    justify-self: start;
+  }
+
+  .memory-card summary {
+    min-height: 50px;
+    padding: 10px;
+  }
+
+  .memory-card summary small {
+    max-width: 42%;
+    text-align: right;
+  }
+
+  .memory-detail {
+    padding: 10px;
+  }
+
+  pre {
+    max-height: 220px;
+    padding: 12px;
+    font-size: 12px;
+  }
+
+  .payment-qr-dialog,
+  .proof-dialog,
+  .contact-admin-dialog {
+    max-width: calc(100% - 20px);
+    max-height: calc(100vh - 20px);
+  }
+
+  .payment-qr-dialog {
+    width: min(92vw, 420px);
+  }
+
+  .proof-dialog {
+    width: calc(100% - 20px);
+    overflow: hidden;
+  }
+
+  .contact-admin-dialog {
+    padding: 18px;
+  }
+
+  .contact-admin-dialog strong {
+    font-size: 20px;
+  }
+
+  .contact-admin-dialog p {
+    font-size: 15px;
+  }
+
+  .qr-close {
+    top: -42px;
+    right: 0;
+    width: 38px;
+    height: 38px;
+    min-height: 38px;
+    border-width: 1px;
+    font-size: 24px;
+  }
+
+  .admin-page {
+    width: 100%;
+    padding: 10px;
+  }
+
+  .admin-title {
+    padding: 14px;
+  }
+
+  .admin-title h1 {
+    font-size: 28px;
+  }
+
+  .admin-title a {
+    justify-self: start;
+  }
+
+  .admin-panel-head button,
+  .order-actions button {
+    width: 100%;
+  }
+
+  .order-actions {
+    display: grid;
+    grid-template-columns: 1fr;
+    justify-content: stretch;
   }
 
   .match-rail,
@@ -1533,9 +1919,7 @@ pre {
   .account-head,
   .user-center-grid,
   .order-row,
-  .pay-grid,
   .payment-proof-form,
-  .plan-grid,
   .order-item,
   .admin-order-item,
   .code-item,
@@ -1544,11 +1928,8 @@ pre {
   .batch-row,
   .memory-controls,
   .memory-grid,
-  .prob-grid,
-  .result-meta,
   .players,
   .schedule-row,
-  .record-stats,
   .record-row,
   .admin-title,
   .admin-login,
@@ -1565,5 +1946,41 @@ pre {
 
   .live-toggle {
     white-space: normal;
+  }
+}
+
+@media (max-width: 380px) {
+  .page {
+    padding-inline: 8px;
+  }
+
+  h1 {
+    font-size: 40px;
+  }
+
+  .hero-meta span {
+    padding-inline: 8px;
+  }
+
+  .toolbar,
+  .live-panel,
+  .account-panel,
+  .panel,
+  .admin-login,
+  .admin-panel {
+    padding: 10px;
+  }
+
+  .plan-grid,
+  .pay-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .pay-summary {
+    grid-column: auto;
+  }
+
+  .prob-grid strong {
+    font-size: 25px;
   }
 }
