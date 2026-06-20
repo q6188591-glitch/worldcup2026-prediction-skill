@@ -78,8 +78,10 @@ const redeemCodeInput = document.querySelector("#redeemCode");
 const redeemButton = document.querySelector("#redeemButton");
 const redeemStatus = document.querySelector("#redeemStatus");
 const orderList = document.querySelector("#orderList");
+const orderHistoryCount = document.querySelector("#orderHistoryCount");
 const myPredictionStats = document.querySelector("#myPredictionStats");
 const myPredictionList = document.querySelector("#myPredictionList");
+const predictionHistoryCount = document.querySelector("#predictionHistoryCount");
 const matchRail = document.querySelector("#matchRail");
 const scheduleGrid = document.querySelector("#scheduleGrid");
 const recordStats = document.querySelector("#recordStats");
@@ -320,6 +322,7 @@ function renderPayment() {
 }
 
 function renderOrders(container, orders) {
+  orderHistoryCount.textContent = `${orders.length} 条`;
   container.innerHTML = "";
   for (const order of orders) {
     const row = document.createElement("div");
@@ -337,6 +340,7 @@ function renderOrders(container, orders) {
 
 function renderMyPredictions(data) {
   const predictions = data?.predictions || [];
+  predictionHistoryCount.textContent = `${data?.total ?? predictions.length} 场`;
   myPredictionStats.textContent = predictions.length
     ? `已记录 ${data.total || predictions.length} 场预测，累计消耗 ${data.totalCreditsUsed || predictions.length} 次。`
     : "暂无预测记录。";

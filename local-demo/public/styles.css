@@ -545,6 +545,59 @@ button.secondary:hover {
   font-weight: 900;
 }
 
+.user-history-section {
+  border: 1px solid #dce8e0;
+  border-radius: 8px;
+  overflow: hidden;
+  background: #f7fbf8;
+}
+
+.user-history-section summary {
+  display: flex;
+  min-height: 54px;
+  padding: 12px 14px;
+  cursor: pointer;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  list-style: none;
+}
+
+.user-history-section summary::-webkit-details-marker {
+  display: none;
+}
+
+.user-history-section summary strong {
+  color: #16261d;
+}
+
+.user-history-section summary span {
+  color: #66746b;
+  font-size: 13px;
+  font-weight: 900;
+}
+
+.user-history-section summary::after {
+  content: "＋";
+  color: #145a36;
+  font-size: 22px;
+  font-weight: 900;
+}
+
+.user-history-section[open] summary {
+  border-bottom: 1px solid #dce8e0;
+}
+
+.user-history-section[open] summary::after {
+  content: "−";
+}
+
+.user-history-section > .order-list,
+.user-history-section > .prediction-history,
+.user-history-section > .batch-status {
+  margin: 10px;
+}
+
 .plan-grid {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
