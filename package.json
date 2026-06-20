@@ -5,7 +5,8 @@
   "description": "Public World Cup prediction demo backed by a server-side model provider.",
   "type": "module",
   "scripts": {
-    "start": "node local-demo/server.mjs"
+    "start": "node local-demo/server.mjs",
+    "test": "node --test local-demo/test/*.test.mjs"
   },
   "repository": {
     "type": "git",

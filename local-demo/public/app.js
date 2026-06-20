@@ -13,29 +13,7 @@ const teams = [
   ["英格兰", "🏴"], ["克罗地亚", "🇭🇷"], ["加纳", "🇬🇭"], ["巴拿马", "🇵🇦"],
 ];
 
-const fallbackSchedule = [
-  { group: "A组", date: "6/12 03:00", label: "已赛 · 北京时间", teamA: "墨西哥", teamB: "南非", status: "FT", score: "2-0" },
-  { group: "A组", date: "6/12 10:00", label: "已赛 · 北京时间", teamA: "韩国", teamB: "捷克", status: "FT", score: "2-1" },
-  { group: "B组", date: "6/13 03:00", label: "已赛 · 北京时间", teamA: "加拿大", teamB: "波黑", status: "FT", score: "1-1" },
-  { group: "D组", date: "6/13 09:00", label: "已赛 · 北京时间", teamA: "美国", teamB: "巴拉圭", status: "FT", score: "4-1" },
-  { group: "B组", date: "6/14 03:00", label: "已赛 · 北京时间", teamA: "卡塔尔", teamB: "瑞士", status: "FT", score: "1-1" },
-  { group: "C组", date: "6/14 06:00", label: "已赛 · 北京时间", teamA: "巴西", teamB: "摩洛哥", status: "FT", score: "1-1" },
-  { group: "C组", date: "6/14 09:00", label: "已赛 · 北京时间", teamA: "海地", teamB: "苏格兰", status: "FT", score: "0-1" },
-  { group: "D组", date: "6/14 12:00", label: "已赛 · 北京时间", teamA: "澳大利亚", teamB: "土耳其", status: "FT", score: "2-0" },
-  { group: "E组", date: "6/15 01:00", label: "已赛 · 北京时间", teamA: "德国", teamB: "库拉索", status: "FT", score: "7-1" },
-  { group: "F组", date: "6/15 04:00", label: "已赛 · 北京时间", teamA: "荷兰", teamB: "日本", status: "FT", score: "2-2" },
-  { group: "E组", date: "6/15 07:00", label: "已赛 · 北京时间", teamA: "科特迪瓦", teamB: "厄瓜多尔", status: "FT", score: "1-0" },
-  { group: "F组", date: "6/15 10:00", label: "已赛 · 北京时间", teamA: "瑞典", teamB: "突尼斯", status: "FT" },
-  { group: "G组", date: "6/16 01:00", label: "小组赛 · 北京时间", teamA: "比利时", teamB: "埃及" },
-  { group: "H组", date: "6/16 04:00", label: "小组赛 · 北京时间", teamA: "伊朗", teamB: "新西兰" },
-  { group: "G组", date: "6/16 07:00", label: "小组赛 · 北京时间", teamA: "西班牙", teamB: "佛得角" },
-  { group: "H组", date: "6/16 10:00", label: "小组赛 · 北京时间", teamA: "沙特", teamB: "乌拉圭" },
-  { group: "I组", date: "6/17 01:00", label: "小组赛 · 北京时间", teamA: "法国", teamB: "塞内加尔" },
-  { group: "J组", date: "6/17 04:00", label: "小组赛 · 北京时间", teamA: "伊拉克", teamB: "挪威" },
-  { group: "I组", date: "6/17 07:00", label: "小组赛 · 北京时间", teamA: "阿根廷", teamB: "阿尔及利亚" },
-  { group: "J组", date: "6/17 10:00", label: "小组赛 · 北京时间", teamA: "奥地利", teamB: "约旦" },
-];
-let schedule = [...fallbackSchedule];
+let schedule = [];
 
 const teamMeta = new Map(teams);
 const form = document.querySelector("#predictForm");
@@ -187,16 +165,16 @@ async function loadSchedule() {
     if (!res.ok) throw new Error(data.error || "赛程读取失败");
     if (Array.isArray(data.matches) && data.matches.length) {
       schedule = data.matches;
-      statusMessage = `已读取实时赛程：${data.matches.length} 场未来比赛。`;
+      statusMessage = `已读取最新赛程：${data.matches.length} 场未来比赛。`;
     } else {
-      schedule = [...fallbackSchedule];
+      schedule = [];
       statusMessage = data.sourceError
-        ? `实时赛程暂不可用，已使用本地赛程兜底：${data.sourceError}`
-        : "实时赛程暂无未来比赛，已使用本地赛程兜底。";
+        ? `最新赛程暂不可用，请稍后刷新：${data.sourceError}`
+        : "当前暂无可预测的未来比赛。";
     }
   } catch (error) {
-    schedule = [...fallbackSchedule];
-    statusMessage = `实时赛程读取失败，已使用本地赛程兜底：${error.message}`;
+    schedule = [];
+    statusMessage = `最新赛程读取失败，请稍后刷新：${error.message}`;
   }
   addBatchDateOptions();
   renderSchedule();
@@ -401,6 +379,9 @@ async function submitAuth(mode) {
     setAuthHint(mode === "register" ? "注册成功，已赠送 3 次预测。" : "登录成功。");
     loadOrders();
     loadMyPredictions();
+    loadSchedule();
+    loadRecords();
+    loadMemory();
   } finally {
     loginButton.disabled = false;
     registerButton.disabled = false;
@@ -519,6 +500,9 @@ function renderSchedule() {
   matchRail.innerHTML = "";
   const futureMatches = schedule.filter(isPredictableMatch).sort((a, b) => matchTimeValue(a) - matchTimeValue(b));
   const upcoming = futureMatches.slice(0, 4);
+  if (!upcoming.length) {
+    matchRail.innerHTML = `<div class="order-empty">正在等待最新赛程，稍后会自动刷新。</div>`;
+  }
   upcoming.forEach((match, index) => {
     const button = document.createElement("button");
     button.type = "button";
@@ -944,6 +928,7 @@ loadConfig().catch((error) => {
 });
 loadLiveContext().then(connectLiveEvents).catch(() => connectLiveEvents());
 setInterval(loadRecords, 60 * 1000);
+setInterval(loadSchedule, 10 * 60 * 1000);
 setInterval(() => {
   if (currentUser) loadOrders();
 }, 10 * 1000);

@@ -4,6 +4,7 @@ import { existsSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { createHmac, randomBytes, randomUUID, scryptSync, timingSafeEqual } from "node:crypto";
+import { filterUpcomingMatches, selectScheduleMatches } from "./live-data-cache.mjs";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(__dirname, "..");
@@ -15,6 +16,8 @@ const memoryPath = path.join(dataDir, "team-memory.json");
 const usersPath = path.join(dataDir, "users.json");
 const ordersPath = path.join(dataDir, "orders.json");
 const redeemCodesPath = path.join(dataDir, "redeem-codes.json");
+const scheduleCachePath = path.join(dataDir, "schedule-cache.json");
+const recordsCachePath = path.join(dataDir, "records-cache.json");
 const paymentProofsDir = path.join(dataDir, "payment-proofs");
 
 async function loadLocalEnv() {
@@ -1471,12 +1474,17 @@ function normalizeScoreboardEvent(event, savedPredictions = new Map()) {
 
 async function fetchCompletedScoreboardRecords(savedPredictions = new Map()) {
   const records = [];
-  for (const date of scoreboardDates()) {
+  const responses = await Promise.allSettled(scoreboardDates().map(async (date) => {
     const response = await fetch(`${scoreboardBaseUrl}?dates=${date}`, {
       headers: { "user-agent": "worldcup-local-demo/1.0" },
     });
-    if (!response.ok) continue;
-    const data = await response.json();
+    if (!response.ok) throw new Error(`Scoreboard ${date} returned ${response.status}`);
+    return response.json();
+  }));
+  const successful = responses.filter((result) => result.status === "fulfilled");
+  if (!successful.length) throw new Error("Completed scoreboard source unavailable");
+  for (const result of successful) {
+    const data = result.value;
     for (const event of data.events || []) {
       if (!event.status?.type?.completed) continue;
       const normalized = normalizeScoreboardEvent(event, savedPredictions);
@@ -1501,12 +1509,17 @@ async function fetchUpcomingSchedule() {
   const savedPredictions = await readSavedPredictions();
   const matches = [];
   const seen = new Set();
-  for (const date of upcomingScoreboardDates(14)) {
+  const responses = await Promise.allSettled(upcomingScoreboardDates(14).map(async (date) => {
     const response = await fetch(`${scoreboardBaseUrl}?dates=${date}`, {
       headers: { "user-agent": "worldcup-local-demo/1.0" },
     });
-    if (!response.ok) continue;
-    const data = await response.json();
+    if (!response.ok) throw new Error(`Scoreboard ${date} returned ${response.status}`);
+    return response.json();
+  }));
+  const successful = responses.filter((result) => result.status === "fulfilled");
+  if (!successful.length) throw new Error("Upcoming scoreboard source unavailable");
+  for (const result of successful) {
+    const data = result.value;
     for (const event of data.events || []) {
       const normalized = normalizeScoreboardEvent(event, savedPredictions);
       if (!normalized || normalized.status === "FT") continue;
@@ -1515,23 +1528,28 @@ async function fetchUpcomingSchedule() {
       matches.push(normalized);
     }
   }
-  return matches;
+  return filterUpcomingMatches(matches);
 }
 
 async function schedule(req, res) {
+  const cached = await readJsonFile(scheduleCachePath, { matches: [] });
   try {
-    const matches = await withTimeout(fetchUpcomingSchedule(), 10_000, "Schedule source timeout");
-    sendJson(res, 200, {
+    const liveMatches = await withTimeout(fetchUpcomingSchedule(), 10_000, "Schedule source timeout");
+    const matches = selectScheduleMatches(liveMatches, cached.matches);
+    const payload = {
       updatedAtIso: new Date().toISOString(),
-      source: "ESPN scoreboard",
+      source: liveMatches.length ? "ESPN scoreboard" : "latest server cache",
       matches,
-    });
+    };
+    if (liveMatches.length) await writeJsonFile(scheduleCachePath, payload);
+    sendJson(res, 200, payload);
   } catch (error) {
+    const matches = selectScheduleMatches([], cached.matches);
     sendJson(res, 200, {
-      updatedAtIso: new Date().toISOString(),
-      source: "local fallback",
+      updatedAtIso: cached.updatedAtIso || new Date().toISOString(),
+      source: matches.length ? "latest server cache" : "schedule unavailable",
       sourceError: error.message,
-      matches: [],
+      matches,
     });
   }
 }
@@ -1604,8 +1622,18 @@ async function buildRecords() {
   try {
     savedPredictions = await readSavedPredictions();
     const records = await fetchCompletedScoreboardRecords(savedPredictions);
-    return summarizeRecords(mergeCompletedRecords(records, fallbackRecords, savedPredictions));
+    const result = summarizeRecords(mergeCompletedRecords(records, fallbackRecords, savedPredictions));
+    await writeJsonFile(recordsCachePath, result);
+    return result;
   } catch (error) {
+    const cached = await readJsonFile(recordsCachePath, null);
+    if (cached?.records?.length) {
+      return {
+        ...cached,
+        nextRefreshAtIso: new Date(Date.now() + recordsRefreshMs).toISOString(),
+        sourceError: error.message,
+      };
+    }
     return summarizeRecords(mergeCompletedRecords([], fallbackRecords, savedPredictions), error.message);
   }
 }
