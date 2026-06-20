@@ -15,7 +15,6 @@ const memoryPath = path.join(dataDir, "team-memory.json");
 const usersPath = path.join(dataDir, "users.json");
 const ordersPath = path.join(dataDir, "orders.json");
 const redeemCodesPath = path.join(dataDir, "redeem-codes.json");
-const smsCodesPath = path.join(dataDir, "sms-codes.json");
 const paymentProofsDir = path.join(dataDir, "payment-proofs");
 
 async function loadLocalEnv() {
@@ -73,13 +72,7 @@ const paymentConfig = {
   alipayQrUrl: process.env.ALIPAY_PAY_QR_URL || "/assets/payment/alipay.jpg",
   payeeName: process.env.PAYMENT_PAYEE_NAME || "",
 };
-const smsConfig = {
-  accessKeyId: process.env.ALIYUN_SMS_ACCESS_KEY_ID || "",
-  accessKeySecret: process.env.ALIYUN_SMS_ACCESS_KEY_SECRET || "",
-  signName: process.env.ALIYUN_SMS_SIGN_NAME || "",
-  templateCode: process.env.ALIYUN_SMS_TEMPLATE_CODE || "",
-  devCode: process.env.SMS_DEV_CODE || "",
-};
+const supportContact = process.env.ADMIN_CONTACT || "请联系网站管理员";
 let liveContextCache = null;
 let liveContextPromise = null;
 const liveClients = new Set();
@@ -296,111 +289,12 @@ async function writeRedeemCodes(codes) {
   await writeJsonFile(redeemCodesPath, codes);
 }
 
-async function readSmsCodes() {
-  return await readJsonFile(smsCodesPath, []);
-}
-
-async function writeSmsCodes(codes) {
-  await writeJsonFile(smsCodesPath, codes);
-}
-
 function normalizePhone(phone) {
   return String(phone || "").replace(/\D/g, "");
 }
 
 function isValidPhone(phone) {
   return /^1\d{10}$/.test(phone);
-}
-
-function aliyunPercentEncode(value) {
-  return encodeURIComponent(String(value))
-    .replace(/\+/g, "%20")
-    .replace(/\*/g, "%2A")
-    .replace(/%7E/g, "~");
-}
-
-async function sendAliyunSms(phone, code) {
-  const parameters = {
-    AccessKeyId: smsConfig.accessKeyId,
-    Action: "SendSms",
-    Format: "JSON",
-    PhoneNumbers: phone,
-    RegionId: "cn-hangzhou",
-    SignName: smsConfig.signName,
-    SignatureMethod: "HMAC-SHA1",
-    SignatureNonce: randomUUID(),
-    SignatureVersion: "1.0",
-    TemplateCode: smsConfig.templateCode,
-    TemplateParam: JSON.stringify({ code }),
-    Timestamp: new Date().toISOString().replace(/\.\d{3}Z$/, "Z"),
-    Version: "2017-05-25",
-  };
-  const canonicalized = Object.keys(parameters)
-    .sort()
-    .map((key) => `${aliyunPercentEncode(key)}=${aliyunPercentEncode(parameters[key])}`)
-    .join("&");
-  const stringToSign = `GET&%2F&${aliyunPercentEncode(canonicalized)}`;
-  parameters.Signature = createHmac("sha1", `${smsConfig.accessKeySecret}&`).update(stringToSign).digest("base64");
-  const query = Object.entries(parameters)
-    .map(([key, value]) => `${aliyunPercentEncode(key)}=${aliyunPercentEncode(value)}`)
-    .join("&");
-  const response = await fetch(`https://dysmsapi.aliyuncs.com/?${query}`);
-  const data = await response.json();
-  if (!response.ok || data.Code !== "OK") throw new Error(data.Message || data.Code || "短信发送失败");
-  return data;
-}
-
-function smsCodeHash(phone, code) {
-  return createHmac("sha256", adminToken || primaryProvider.apiKey || "worldcup2026-sms")
-    .update(`${phone}:${code}`)
-    .digest("hex");
-}
-
-async function sendSmsCode(req, res) {
-  const payload = await readJson(req);
-  const phone = normalizePhone(payload.phone);
-  if (!isValidPhone(phone)) {
-    sendJson(res, 422, { error: "请输入 11 位手机号" });
-    return;
-  }
-  const configured = smsConfig.devCode || (smsConfig.accessKeyId && smsConfig.accessKeySecret && smsConfig.signName && smsConfig.templateCode);
-  if (!configured) {
-    sendJson(res, 503, { error: "短信服务尚未配置，请暂时使用密码登录" });
-    return;
-  }
-  const codes = await readSmsCodes();
-  const now = Date.now();
-  const latest = codes.find((item) => item.phone === phone);
-  if (latest && now - Number(latest.sentAt || 0) < 60_000) {
-    sendJson(res, 429, { error: "验证码发送太频繁，请稍后再试" });
-    return;
-  }
-  const code = smsConfig.devCode || String(Math.floor(100000 + Math.random() * 900000));
-  if (!smsConfig.devCode) await sendAliyunSms(phone, code);
-  const item = {
-    phone,
-    codeHash: smsCodeHash(phone, code),
-    sentAt: now,
-    expiresAt: now + 5 * 60_000,
-    attempts: 0,
-  };
-  const next = [item, ...codes.filter((entry) => entry.phone !== phone && Number(entry.expiresAt || 0) > now)].slice(0, 2000);
-  await writeSmsCodes(next);
-  sendJson(res, 200, { ok: true, expiresIn: 300, devMode: Boolean(smsConfig.devCode) });
-}
-
-async function verifySmsCode(phone, code) {
-  const codes = await readSmsCodes();
-  const item = codes.find((entry) => entry.phone === phone);
-  if (!item || Number(item.expiresAt || 0) <= Date.now()) return { ok: false, error: "验证码已失效，请重新获取" };
-  if (Number(item.attempts || 0) >= 5) return { ok: false, error: "验证码错误次数过多，请重新获取" };
-  if (!safeTextEqual(item.codeHash, smsCodeHash(phone, code))) {
-    item.attempts = Number(item.attempts || 0) + 1;
-    await writeSmsCodes(codes);
-    return { ok: false, error: "验证码错误" };
-  }
-  await writeSmsCodes(codes.filter((entry) => entry !== item));
-  return { ok: true };
 }
 
 function passwordHash(password, salt = randomBytes(16).toString("hex")) {
@@ -711,6 +605,7 @@ async function authMe(req, res) {
     user: user ? publicUser(user) : null,
     plans: Object.values(membershipPlans).filter((plan) => plan.price > 0),
     payment: publicPaymentConfig(),
+    supportContact,
   });
 }
 
@@ -765,45 +660,6 @@ async function login(req, res) {
   data.sessions = data.sessions.filter((item) => new Date(item.expiresAtIso) > new Date()).slice(-5000);
   await writeUsers(data);
   sendJson(res, 200, { user: publicUser(user) }, { "set-cookie": sessionCookie(token) });
-}
-
-async function smsLogin(req, res) {
-  const payload = await readJson(req);
-  const phone = normalizePhone(payload.phone);
-  const code = String(payload.code || "").trim();
-  if (!isValidPhone(phone)) {
-    sendJson(res, 422, { error: "请输入 11 位手机号" });
-    return;
-  }
-  if (!/^\d{6}$/.test(code)) {
-    sendJson(res, 422, { error: "请输入 6 位验证码" });
-    return;
-  }
-  const verified = await verifySmsCode(phone, code);
-  if (!verified.ok) {
-    sendJson(res, 401, { error: verified.error });
-    return;
-  }
-  const data = await readUsers();
-  let user = data.users.find((item) => item.phone === phone);
-  let isNewUser = false;
-  if (!user) {
-    isNewUser = true;
-    user = {
-      id: randomUUID(),
-      phone,
-      predictionCredits: membershipPlans.trial3.credits,
-      freePredictionsLeft: membershipPlans.trial3.credits,
-      planName: "新用户免费",
-      createdAtIso: new Date().toISOString(),
-    };
-    data.users.push(user);
-  }
-  const token = randomUUID();
-  data.sessions.push({ token, userId: user.id, createdAtIso: new Date().toISOString(), expiresAtIso: new Date(Date.now() + 30 * 86400_000).toISOString() });
-  data.sessions = data.sessions.filter((item) => new Date(item.expiresAtIso) > new Date()).slice(-5000);
-  await writeUsers(data);
-  sendJson(res, 200, { user: publicUser(user), isNewUser }, { "set-cookie": sessionCookie(token) });
 }
 
 async function logout(req, res) {
@@ -1928,14 +1784,6 @@ createServer(async (req, res) => {
     }
     if (req.method === "POST" && route === "/api/auth/login") {
       await login(req, res);
-      return;
-    }
-    if (req.method === "POST" && route === "/api/auth/sms/send") {
-      await sendSmsCode(req, res);
-      return;
-    }
-    if (req.method === "POST" && route === "/api/auth/sms/login") {
-      await smsLogin(req, res);
       return;
     }
     if (req.method === "POST" && route === "/api/auth/logout") {

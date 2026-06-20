@@ -495,33 +495,8 @@ button.secondary:hover {
   font-weight: 800;
 }
 
-.auth-stack {
-  display: grid;
-  gap: 10px;
-}
-
-.sms-login-row {
-  display: grid;
-  grid-template-columns: 1fr max-content max-content;
-  gap: 10px;
-}
-
-.password-login {
-  border-top: 1px solid #dce8e0;
-  padding-top: 10px;
-}
-
-.password-login summary {
-  color: #66746b;
-  cursor: pointer;
-  font-weight: 900;
-}
-
-.password-login-row {
-  display: grid;
-  grid-template-columns: 1fr max-content;
-  gap: 10px;
-  margin-top: 10px;
+.auth-grid {
+  grid-template-columns: 1fr 1fr max-content max-content max-content;
 }
 
 .auth-hint {
@@ -851,6 +826,34 @@ button.secondary:hover {
   width: 100%;
   max-height: calc(88vh - 20px);
   object-fit: contain;
+}
+
+.contact-admin-dialog {
+  width: min(440px, calc(100% - 24px));
+  padding: 24px;
+  border: 0;
+  border-radius: 8px;
+  overflow: visible;
+  background: white;
+  color: #16261d;
+  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.32);
+}
+
+.contact-admin-dialog::backdrop {
+  background: rgba(0, 0, 0, 0.65);
+}
+
+.contact-admin-dialog strong {
+  display: block;
+  font-size: 22px;
+}
+
+.contact-admin-dialog p {
+  margin: 12px 0 0;
+  color: #53625a;
+  font-size: 17px;
+  line-height: 1.7;
+  white-space: pre-wrap;
 }
 
 .order-list {
@@ -1526,9 +1529,7 @@ pre {
 
   .match-rail,
   .versus-grid,
-  .auth-stack,
-  .sms-login-row,
-  .password-login-row,
+  .auth-grid,
   .account-head,
   .user-center-grid,
   .order-row,
