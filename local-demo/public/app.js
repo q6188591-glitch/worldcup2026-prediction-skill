@@ -59,8 +59,12 @@ const userCenterPhone = document.querySelector("#userCenterPhone");
 const userCenterCredits = document.querySelector("#userCenterCredits");
 const userCenterPlan = document.querySelector("#userCenterPlan");
 const planGrid = document.querySelector("#planGrid");
-const wechatQr = document.querySelector("#wechatQr");
-const alipayQr = document.querySelector("#alipayQr");
+const openWechatQrButton = document.querySelector("#openWechatQr");
+const openAlipayQrButton = document.querySelector("#openAlipayQr");
+const paymentQrDialog = document.querySelector("#paymentQrDialog");
+const paymentQrCrop = document.querySelector("#paymentQrCrop");
+const paymentQrImage = document.querySelector("#paymentQrImage");
+const closePaymentQrButton = document.querySelector("#closePaymentQr");
 const selectedPlanText = document.querySelector("#selectedPlanText");
 const payeeName = document.querySelector("#payeeName");
 const paymentHint = document.querySelector("#paymentHint");
@@ -282,16 +286,17 @@ function selectedPlan() {
   return plans.find((plan) => plan.id === selectedPlanId) || plans[0] || null;
 }
 
-function renderQr(container, url, label) {
-  container.innerHTML = "";
-  if (!url) {
-    container.textContent = "待配置";
-    return;
-  }
-  const img = document.createElement("img");
-  img.src = url;
-  img.alt = label;
-  container.append(img);
+function setPaymentEntry(button, url) {
+  button.disabled = !url;
+  button.querySelector("span").textContent = url ? "点击打开收款码" : "收款码待配置";
+}
+
+function openPaymentQr(url, label, provider) {
+  if (!url) return;
+  paymentQrImage.src = url;
+  paymentQrImage.alt = label;
+  paymentQrCrop.className = `payment-qr-crop is-${provider}`;
+  paymentQrDialog.showModal();
 }
 
 function renderPayment() {
@@ -303,8 +308,8 @@ function renderPayment() {
       ? "测试专用：付款 0.01 元后生成测试充值码验证流程。"
       : "扫码付款后，联系管理员获取对应套餐充值码。"
     : "选择次数包后再扫码付款。";
-  renderQr(wechatQr, payment.wechatQrUrl, "微信收款二维码");
-  renderQr(alipayQr, payment.alipayQrUrl, "支付宝收款二维码");
+  setPaymentEntry(openWechatQrButton, payment.wechatQrUrl);
+  setPaymentEntry(openAlipayQrButton, payment.alipayQrUrl);
 }
 
 function renderOrders(container, orders) {
@@ -828,6 +833,12 @@ registerButton.addEventListener("click", () => submitAuth("register").catch((err
 logoutButton.addEventListener("click", async () => {
   await fetch(apiPath("auth/logout"), { method: "POST" });
   renderAccount(null);
+});
+openWechatQrButton.addEventListener("click", () => openPaymentQr(payment.wechatQrUrl, "微信收款二维码", "wechat"));
+openAlipayQrButton.addEventListener("click", () => openPaymentQr(payment.alipayQrUrl, "支付宝收款二维码", "alipay"));
+closePaymentQrButton.addEventListener("click", () => paymentQrDialog.close());
+paymentQrDialog.addEventListener("click", (event) => {
+  if (event.target === paymentQrDialog) paymentQrDialog.close();
 });
 redeemButton.addEventListener("click", redeemCode);
 batchPredictButton.addEventListener("click", runBatchPrediction);

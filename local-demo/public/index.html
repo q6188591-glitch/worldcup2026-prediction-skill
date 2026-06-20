@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>赛场罗盘 26 · 世界杯预测模板</title>
-    <link rel="stylesheet" href="styles.css?v=20260617-history-ops" />
+    <link rel="stylesheet" href="styles.css?v=20260620-payment-qr-modal" />
   </head>
   <body>
     <div class="notice">AI 赛前推演模板，仅供球迷讨论与内容创作，不提供投注、赔率或下注建议。</div>
@@ -75,14 +75,14 @@
           </div>
           <div id="planGrid" class="plan-grid"></div>
           <div class="pay-grid">
-            <div class="pay-card">
+            <button id="openWechatQr" class="pay-card pay-entry is-wechat" type="button">
               <strong>微信扫码</strong>
-              <div id="wechatQr" class="qr-box">待配置</div>
-            </div>
-            <div class="pay-card">
+              <span>点击打开收款码</span>
+            </button>
+            <button id="openAlipayQr" class="pay-card pay-entry is-alipay" type="button">
               <strong>支付宝扫码</strong>
-              <div id="alipayQr" class="qr-box">待配置</div>
-            </div>
+              <span>点击打开收款码</span>
+            </button>
             <div class="pay-card pay-summary">
               <strong id="selectedPlanText">请选择次数包</strong>
               <span id="payeeName"></span>
@@ -252,6 +252,13 @@
       </section>
     </main>
 
-    <script src="app.js?v=20260617-history-ops"></script>
+    <dialog id="paymentQrDialog" class="payment-qr-dialog">
+      <button id="closePaymentQr" class="qr-close" type="button" aria-label="关闭">×</button>
+      <div id="paymentQrCrop" class="payment-qr-crop">
+        <img id="paymentQrImage" alt="收款二维码" />
+      </div>
+    </dialog>
+
+    <script src="app.js?v=20260620-payment-qr-modal"></script>
   </body>
 </html>

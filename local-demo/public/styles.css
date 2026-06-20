@@ -604,6 +604,33 @@ button.secondary:hover {
   background: #f7fbf8;
 }
 
+.pay-entry {
+  align-content: center;
+  text-align: left;
+  cursor: pointer;
+}
+
+.pay-entry.is-wechat {
+  border-color: #9bdcb8;
+  background: #eefbf3;
+}
+
+.pay-entry.is-alipay {
+  border-color: #9fc8f7;
+  background: #eef6ff;
+}
+
+.pay-entry:hover {
+  border-color: #145a36;
+  transform: translateY(-1px);
+}
+
+.pay-entry:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+  transform: none;
+}
+
 .pay-card strong {
   color: #16261d;
 }
@@ -622,21 +649,64 @@ button.secondary:hover {
   align-content: center;
 }
 
-.qr-box {
-  display: grid;
-  place-items: center;
-  min-height: 92px;
-  border: 1px dashed #b9d0c2;
+.payment-qr-dialog {
+  width: min(82vmin, 620px);
+  max-width: calc(100% - 24px);
+  padding: 0;
+  border: 0;
   border-radius: 8px;
-  color: #66746b;
-  font-weight: 900;
+  overflow: visible;
+  background: white;
+  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.32);
+}
+
+.payment-qr-dialog::backdrop {
+  background: rgba(0, 0, 0, 0.72);
+}
+
+.payment-qr-crop {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 1;
+  overflow: hidden;
+  border-radius: 8px;
   background: white;
 }
 
-.qr-box img {
-  width: min(140px, 100%);
-  aspect-ratio: 1;
-  object-fit: contain;
+.payment-qr-crop img {
+  position: absolute;
+  max-width: none;
+  height: auto;
+}
+
+.payment-qr-crop.is-wechat img {
+  width: 211%;
+  left: -55.7%;
+  top: -69.5%;
+}
+
+.payment-qr-crop.is-alipay img {
+  width: 152.1%;
+  left: -26.1%;
+  top: -81.8%;
+}
+
+.qr-close {
+  position: absolute;
+  z-index: 2;
+  top: -16px;
+  right: -16px;
+  display: grid;
+  place-items: center;
+  width: 42px;
+  height: 42px;
+  padding: 0;
+  border: 2px solid white;
+  border-radius: 50%;
+  background: #102018;
+  color: white;
+  font-size: 28px;
+  line-height: 1;
 }
 
 .order-list {
