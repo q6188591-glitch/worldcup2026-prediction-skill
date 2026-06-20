@@ -49,9 +49,11 @@ const accountStatus = document.querySelector("#accountStatus");
 const accountMeta = document.querySelector("#accountMeta");
 const authForms = document.querySelector("#authForms");
 const authPhone = document.querySelector("#authPhone");
+const smsCodeInput = document.querySelector("#smsCode");
+const sendSmsCodeButton = document.querySelector("#sendSmsCode");
+const smsLoginButton = document.querySelector("#smsLoginButton");
 const authPassword = document.querySelector("#authPassword");
 const loginButton = document.querySelector("#loginButton");
-const registerButton = document.querySelector("#registerButton");
 const authHint = document.querySelector("#authHint");
 const logoutButton = document.querySelector("#logoutButton");
 const memberArea = document.querySelector("#memberArea");
@@ -108,6 +110,7 @@ let plans = [];
 let selectedPlanId = "";
 let payment = {};
 let knownOrderStatuses = null;
+let smsCountdownTimer = null;
 
 function apiPath(path) {
   return `api/${path.replace(/^\//, "")}`;
@@ -226,6 +229,14 @@ function authValidationMessage() {
   const password = authPassword.value || "";
   if (!/^1\d{10}$/.test(phone)) return "请输入 11 位手机号。";
   if (password.length < 6) return "密码至少 6 位。";
+  return "";
+}
+
+function smsValidationMessage() {
+  const phone = cleanPhone(authPhone.value);
+  const code = smsCodeInput.value.trim();
+  if (!/^1\d{10}$/.test(phone)) return "请输入 11 位手机号。";
+  if (!/^\d{6}$/.test(code)) return "请输入 6 位验证码。";
   return "";
 }
 
@@ -372,17 +383,16 @@ async function loadAuth() {
   }
 }
 
-async function submitAuth(mode) {
+async function submitAuth() {
   const validation = authValidationMessage();
   if (validation) {
     setAuthHint(validation);
     return;
   }
   loginButton.disabled = true;
-  registerButton.disabled = true;
-  setAuthHint(mode === "login" ? "正在登录..." : "正在注册...");
+  setAuthHint("正在登录...");
   try {
-    const res = await fetch(apiPath(`auth/${mode}`), {
+    const res = await fetch(apiPath("auth/login"), {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ phone: cleanPhone(authPhone.value), password: authPassword.value }),
@@ -396,7 +406,73 @@ async function submitAuth(mode) {
     loadMyPredictions();
   } finally {
     loginButton.disabled = false;
-    registerButton.disabled = false;
+  }
+}
+
+function startSmsCountdown(seconds = 60) {
+  if (smsCountdownTimer) clearInterval(smsCountdownTimer);
+  let remaining = seconds;
+  sendSmsCodeButton.disabled = true;
+  sendSmsCodeButton.textContent = `${remaining}s`;
+  smsCountdownTimer = setInterval(() => {
+    remaining -= 1;
+    sendSmsCodeButton.textContent = remaining > 0 ? `${remaining}s` : "获取验证码";
+    if (remaining <= 0) {
+      clearInterval(smsCountdownTimer);
+      smsCountdownTimer = null;
+      sendSmsCodeButton.disabled = false;
+    }
+  }, 1000);
+}
+
+async function sendSmsCodeRequest() {
+  const phone = cleanPhone(authPhone.value);
+  if (!/^1\d{10}$/.test(phone)) {
+    setAuthHint("请输入 11 位手机号。");
+    return;
+  }
+  sendSmsCodeButton.disabled = true;
+  setAuthHint("正在发送验证码...");
+  try {
+    const res = await fetch(apiPath("auth/sms/send"), {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ phone }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || "验证码发送失败");
+    setAuthHint(data.devMode ? "测试验证码已生成，请使用服务器配置的 SMS_DEV_CODE。" : "验证码已发送，5 分钟内有效。");
+    startSmsCountdown(60);
+  } catch (error) {
+    sendSmsCodeButton.disabled = false;
+    setAuthHint(error.message);
+  }
+}
+
+async function smsLogin() {
+  const validation = smsValidationMessage();
+  if (validation) {
+    setAuthHint(validation);
+    return;
+  }
+  smsLoginButton.disabled = true;
+  setAuthHint("正在验证手机号...");
+  try {
+    const res = await fetch(apiPath("auth/sms/login"), {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ phone: cleanPhone(authPhone.value), code: smsCodeInput.value.trim() }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || "验证码登录失败");
+    knownOrderStatuses = null;
+    smsCodeInput.value = "";
+    renderAccount(data.user);
+    setAuthHint(data.isNewUser ? "注册成功，已赠送 3 次预测。" : "登录成功。");
+    loadOrders();
+    loadMyPredictions();
+  } finally {
+    smsLoginButton.disabled = false;
   }
 }
 
@@ -900,8 +976,9 @@ refreshLiveButton.addEventListener("click", () => {
   loadRecords();
 });
 
-loginButton.addEventListener("click", () => submitAuth("login").catch((error) => { accountMeta.textContent = error.message; }));
-registerButton.addEventListener("click", () => submitAuth("register").catch((error) => { accountMeta.textContent = error.message; }));
+sendSmsCodeButton.addEventListener("click", sendSmsCodeRequest);
+smsLoginButton.addEventListener("click", () => smsLogin().catch((error) => { setAuthHint(error.message); }));
+loginButton.addEventListener("click", () => submitAuth().catch((error) => { setAuthHint(error.message); }));
 logoutButton.addEventListener("click", async () => {
   await fetch(apiPath("auth/logout"), { method: "POST" });
   knownOrderStatuses = null;

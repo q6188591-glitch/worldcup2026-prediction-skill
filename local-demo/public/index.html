@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>赛场罗盘 26 · 世界杯预测模板</title>
-    <link rel="stylesheet" href="styles.css?v=20260620-paid-button" />
+    <link rel="stylesheet" href="styles.css?v=20260620-sms-auth" />
   </head>
   <body>
     <div class="notice">AI 赛前推演模板，仅供球迷讨论与内容创作，不提供投注、赔率或下注建议。</div>
@@ -45,18 +45,24 @@
           </div>
           <button id="logoutButton" class="secondary" type="button" hidden>退出登录</button>
         </div>
-        <div id="authForms" class="auth-grid">
+        <div id="authForms" class="auth-stack">
           <label>
             手机号
             <input id="authPhone" inputmode="tel" autocomplete="tel" placeholder="输入手机号" />
           </label>
-          <label>
-            密码
-            <input id="authPassword" type="password" autocomplete="current-password" placeholder="至少 6 位" />
-          </label>
-          <button id="loginButton" type="button">登录</button>
-          <button id="registerButton" class="secondary" type="button">注册</button>
-          <small id="authHint" class="auth-hint">手机号用于登录和找回充值记录。</small>
+          <div class="sms-login-row">
+            <input id="smsCode" inputmode="numeric" autocomplete="one-time-code" maxlength="6" placeholder="6 位验证码" />
+            <button id="sendSmsCode" class="secondary" type="button">获取验证码</button>
+            <button id="smsLoginButton" type="button">登录 / 注册</button>
+          </div>
+          <small id="authHint" class="auth-hint">新手机号验证成功后自动注册，并赠送 3 次预测。</small>
+          <details class="password-login">
+            <summary>使用原账号密码登录</summary>
+            <div class="password-login-row">
+              <input id="authPassword" type="password" autocomplete="current-password" placeholder="输入密码" />
+              <button id="loginButton" type="button">密码登录</button>
+            </div>
+          </details>
         </div>
         <div id="memberArea" class="member-area" hidden>
           <div class="user-center-grid">
@@ -95,11 +101,11 @@
               <option value="alipay">支付宝</option>
             </select>
             <input id="payerName" placeholder="付款昵称（可选）" />
+            <button id="submitPaymentOrder" class="paid-confirm-button" type="button">我已支付</button>
             <label class="proof-upload">
               <input id="paymentProof" type="file" accept="image/jpeg,image/png,image/webp" />
               <span id="proofFileName">付款截图（可选）</span>
             </label>
-            <button id="submitPaymentOrder" type="button">我已支付</button>
           </div>
           <div id="paymentOrderStatus" class="batch-status">付款后点击“我已支付”，订单会绑定当前账号，审核通过自动增加次数。</div>
           <details class="redeem-fallback">
@@ -285,6 +291,6 @@
       </div>
     </dialog>
 
-    <script src="app.js?v=20260620-paid-button"></script>
+    <script src="app.js?v=20260620-sms-auth"></script>
   </body>
 </html>
