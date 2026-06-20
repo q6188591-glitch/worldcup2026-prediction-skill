@@ -3,7 +3,7 @@ import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { randomBytes, randomUUID, scryptSync, timingSafeEqual } from "node:crypto";
+import { createHmac, randomBytes, randomUUID, scryptSync, timingSafeEqual } from "node:crypto";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(__dirname, "..");
@@ -118,8 +118,9 @@ function requireAdmin(req, res) {
     sendJson(res, 404, { error: "Admin API is disabled" });
     return false;
   }
-  const token = req.headers["x-admin-token"];
-  if (token !== adminToken) {
+  const headerToken = String(req.headers["x-admin-token"] || "");
+  const hasHeaderToken = headerToken && safeTextEqual(headerToken, adminToken);
+  if (!hasHeaderToken && !hasValidAdminSession(req)) {
     sendJson(res, 401, { error: "Unauthorized" });
     return false;
   }
@@ -185,6 +186,35 @@ function parseCookies(req) {
           : [decodeURIComponent(part.slice(0, index)), decodeURIComponent(part.slice(index + 1))];
       }),
   );
+}
+
+function safeTextEqual(left, right) {
+  const a = Buffer.from(String(left || ""));
+  const b = Buffer.from(String(right || ""));
+  return a.length === b.length && timingSafeEqual(a, b);
+}
+
+function adminSessionSignature(expiresAt) {
+  return createHmac("sha256", adminToken).update(`admin:${expiresAt}`).digest("hex");
+}
+
+function adminSessionCookie() {
+  const expiresAt = Date.now() + 7 * 86400_000;
+  const value = `${expiresAt}.${adminSessionSignature(expiresAt)}`;
+  return `wc_admin_session=${encodeURIComponent(value)}; Max-Age=604800; Path=/; HttpOnly; SameSite=Strict`;
+}
+
+function clearAdminSessionCookie() {
+  return "wc_admin_session=; Max-Age=0; Path=/; HttpOnly; SameSite=Strict";
+}
+
+function hasValidAdminSession(req) {
+  if (!adminToken) return false;
+  const value = parseCookies(req).wc_admin_session || "";
+  const [expiresText, signature] = value.split(".");
+  const expiresAt = Number(expiresText);
+  if (!Number.isFinite(expiresAt) || expiresAt <= Date.now() || !signature) return false;
+  return safeTextEqual(signature, adminSessionSignature(expiresAt));
 }
 
 function fableUses(req) {
@@ -653,16 +683,17 @@ async function createOrder(req, res) {
     sendJson(res, 422, { error: "请选择付款方式" });
     return;
   }
-  if (!payerName) {
-    sendJson(res, 422, { error: "请填写付款昵称或姓名" });
-    return;
-  }
-  const proof = parseProofDataUrl(payload.proofDataUrl);
-  if (!proof) {
-    sendJson(res, 422, { error: "请上传不超过 3MB 的 JPG、PNG 或 WebP 付款截图" });
+  const proofDataUrl = String(payload.proofDataUrl || "");
+  if (proofDataUrl && !parseProofDataUrl(proofDataUrl)) {
+    sendJson(res, 422, { error: "付款截图需为不超过 3MB 的 JPG、PNG 或 WebP 图片" });
     return;
   }
   const orders = await readOrders();
+  const pendingOrder = orders.find((order) => order.userId === user.id && order.planId === plan.id && order.status === "pending");
+  if (pendingOrder) {
+    sendJson(res, 409, { error: `已有待审核订单 ${pendingOrder.orderNo}，请勿重复提交`, order: publicOrder(pendingOrder) });
+    return;
+  }
   const order = {
     id: randomUUID(),
     orderNo: `WC${Date.now()}${String(Math.floor(Math.random() * 1000)).padStart(3, "0")}`,
@@ -681,9 +712,11 @@ async function createOrder(req, res) {
     rejectedAtIso: "",
     rejectReason: "",
   };
-  const savedProof = await savePaymentProof(order.id, payload.proofDataUrl);
-  order.proofFileName = savedProof.fileName;
-  order.proofContentType = savedProof.contentType;
+  if (proofDataUrl) {
+    const savedProof = await savePaymentProof(order.id, proofDataUrl);
+    order.proofFileName = savedProof.fileName;
+    order.proofContentType = savedProof.contentType;
+  }
   orders.unshift(order);
   await writeOrders(orders);
   sendJson(res, 200, { order: publicOrder(order) });
@@ -713,6 +746,23 @@ async function adminOrders(req, res) {
   if (!requireAdmin(req, res)) return;
   const orders = await readOrders();
   sendJson(res, 200, { orders: orders.slice(0, 100).map(publicOrder) });
+}
+
+async function adminLogin(req, res) {
+  if (!adminToken) {
+    sendJson(res, 404, { error: "Admin API is disabled" });
+    return;
+  }
+  const payload = await readJson(req);
+  if (!safeTextEqual(payload.token, adminToken)) {
+    sendJson(res, 401, { error: "管理员密钥错误" });
+    return;
+  }
+  sendJson(res, 200, { ok: true }, { "set-cookie": adminSessionCookie() });
+}
+
+async function adminLogout(req, res) {
+  sendJson(res, 200, { ok: true }, { "set-cookie": clearAdminSessionCookie() });
 }
 
 async function adminOverview(req, res) {
@@ -1752,6 +1802,14 @@ createServer(async (req, res) => {
     }
     if (req.method === "POST" && route === "/api/redeem") {
       await redeemCode(req, res);
+      return;
+    }
+    if (req.method === "POST" && route === "/api/admin/login") {
+      await adminLogin(req, res);
+      return;
+    }
+    if (req.method === "POST" && route === "/api/admin/logout") {
+      await adminLogout(req, res);
       return;
     }
     if (req.method === "GET" && route === "/api/admin/orders") {

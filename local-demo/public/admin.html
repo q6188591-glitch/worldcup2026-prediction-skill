@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>赛场罗盘 26 · 管理后台</title>
-    <link rel="stylesheet" href="styles.css?v=20260620-payment-proof" />
+    <link rel="stylesheet" href="styles.css?v=20260620-paid-button" />
   </head>
   <body class="admin-body">
     <main class="admin-page">
@@ -20,6 +20,7 @@
         <div class="admin-login">
           <input id="adminToken" type="password" autocomplete="off" placeholder="ADMIN_TOKEN" />
           <button id="loadDashboard" type="button">进入后台</button>
+          <button id="adminLogout" class="secondary" type="button" hidden>退出后台</button>
           <small id="adminStatus">输入管理员令牌后读取运营数据。</small>
         </div>
 
@@ -68,6 +69,6 @@
       <button id="closeProof" class="qr-close" type="button" aria-label="关闭">×</button>
       <img id="proofImage" alt="付款凭证" />
     </dialog>
-    <script src="admin.js?v=20260620-payment-proof"></script>
+    <script src="admin.js?v=20260620-paid-button"></script>
   </body>
 </html>

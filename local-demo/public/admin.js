@@ -1,5 +1,6 @@
 const adminTokenInput = document.querySelector("#adminToken");
 const loadDashboardButton = document.querySelector("#loadDashboard");
+const adminLogoutButton = document.querySelector("#adminLogout");
 const adminStatus = document.querySelector("#adminStatus");
 const adminStats = document.querySelector("#adminStats");
 const topPlans = document.querySelector("#topPlans");
@@ -58,7 +59,13 @@ async function copyText(text) {
 }
 
 function authHeaders() {
-  return { "x-admin-token": adminTokenInput.value };
+  return adminTokenInput.value ? { "x-admin-token": adminTokenInput.value } : {};
+}
+
+function setAdminAuthenticated(authenticated) {
+  adminTokenInput.hidden = authenticated;
+  loadDashboardButton.hidden = authenticated;
+  adminLogoutButton.hidden = !authenticated;
 }
 
 function renderStats(stats = {}) {
@@ -146,7 +153,7 @@ function renderOrders(orders = []) {
     row.className = `order-item admin-order-item is-${order.status}`;
     row.innerHTML = `
       <strong>${order.planName} · ￥${price(order.amount)}</strong>
-      <span>${order.phone || ""} · ${order.paymentMethod === "wechat" ? "微信" : order.paymentMethod === "alipay" ? "支付宝" : "充值码"} · ${order.payerName || ""}</span>
+      <span>${order.phone || ""} · ${order.paymentMethod === "wechat" ? "微信" : order.paymentMethod === "alipay" ? "支付宝" : "充值码"} · ${order.payerName || "账号申报已付款"}</span>
       <small>${statusLabel} · ${order.credits || ""} 次 · ${order.orderNo} · ${formatTime(order.createdAtIso)}${order.rejectReason ? ` · ${order.rejectReason}` : ""}</small>
       <div class="order-actions">
         ${order.hasProof ? `<button type="button" data-action="proof">查看凭证</button>` : ""}
@@ -233,6 +240,51 @@ async function refreshDashboard() {
   await Promise.all([loadOrders(), loadCodes()]);
 }
 
+async function loginAdmin() {
+  const token = adminTokenInput.value;
+  if (!token) {
+    adminStatus.textContent = "请输入管理员密钥。";
+    return;
+  }
+  loadDashboardButton.disabled = true;
+  adminStatus.textContent = "正在登录后台...";
+  try {
+    const res = await fetch(apiPath("admin/login"), {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ token }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || "后台登录失败");
+    adminTokenInput.value = "";
+    setAdminAuthenticated(true);
+    await refreshDashboard();
+  } finally {
+    loadDashboardButton.disabled = false;
+  }
+}
+
+async function restoreAdminSession() {
+  try {
+    await refreshDashboard();
+    setAdminAuthenticated(true);
+  } catch {
+    setAdminAuthenticated(false);
+    adminStatus.textContent = "输入管理员令牌后读取运营数据。";
+  }
+}
+
+async function logoutAdmin() {
+  await fetch(apiPath("admin/logout"), { method: "POST" });
+  setAdminAuthenticated(false);
+  adminStats.innerHTML = "";
+  topPlans.innerHTML = "";
+  adminUsers.innerHTML = "";
+  adminOrders.innerHTML = "";
+  adminCodes.innerHTML = "";
+  adminStatus.textContent = "已退出后台。";
+}
+
 async function generateCodes() {
   generateCodesButton.disabled = true;
   adminStatus.textContent = "正在生成充值码...";
@@ -257,7 +309,8 @@ async function generateCodes() {
   }
 }
 
-loadDashboardButton.addEventListener("click", () => refreshDashboard().catch((error) => { adminStatus.textContent = error.message; }));
+loadDashboardButton.addEventListener("click", () => loginAdmin().catch((error) => { adminStatus.textContent = error.message; }));
+adminLogoutButton.addEventListener("click", () => logoutAdmin().catch((error) => { adminStatus.textContent = error.message; }));
 refreshOrdersButton.addEventListener("click", () => Promise.all([loadOrders(), loadCodes()]).catch((error) => { adminStatus.textContent = error.message; }));
 generateCodesButton.addEventListener("click", () => generateCodes().catch((error) => { adminStatus.textContent = error.message; }));
 copyLatestCodesButton.addEventListener("click", async () => {
@@ -272,3 +325,4 @@ closeProofButton.addEventListener("click", () => proofDialog.close());
 proofDialog.addEventListener("click", (event) => {
   if (event.target === proofDialog) proofDialog.close();
 });
+restoreAdminSession();

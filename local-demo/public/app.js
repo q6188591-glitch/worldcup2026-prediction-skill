@@ -314,8 +314,8 @@ function renderPayment() {
   payeeName.textContent = payment.payeeName ? `收款方：${payment.payeeName}` : "";
   paymentHint.textContent = plan
     ? isTestPlan(plan)
-      ? "测试专用：付款 0.01 元后上传凭证，审核通过自动到账。"
-      : "扫码付款后上传凭证，管理员确认后次数自动到账。"
+      ? "测试专用：付款 0.01 元后点击“我已支付”，审核通过自动到账。"
+      : "扫码付款后点击“我已支付”，管理员按当前账号确认到账。"
     : "选择次数包后再扫码付款。";
   setPaymentEntry(openWechatQrButton, payment.wechatQrUrl);
   setPaymentEntry(openAlipayQrButton, payment.alipayQrUrl);
@@ -435,22 +435,14 @@ async function submitPaymentOrder() {
     paymentOrderStatus.textContent = "请先选择次数包。";
     return;
   }
-  if (!payerNameInput.value.trim()) {
-    paymentOrderStatus.textContent = "请填写付款昵称或姓名。";
-    return;
-  }
-  if (!file) {
-    paymentOrderStatus.textContent = "请上传付款截图。";
-    return;
-  }
-  if (file.size > 3 * 1024 * 1024) {
+  if (file && file.size > 3 * 1024 * 1024) {
     paymentOrderStatus.textContent = "付款截图不能超过 3MB。";
     return;
   }
   submitPaymentOrderButton.disabled = true;
-  paymentOrderStatus.textContent = "正在提交付款凭证...";
+  paymentOrderStatus.textContent = "正在提交付款订单...";
   try {
-    const proofDataUrl = await fileAsDataUrl(file);
+    const proofDataUrl = file ? await fileAsDataUrl(file) : "";
     const res = await fetch(apiPath("orders"), {
       method: "POST",
       headers: { "content-type": "application/json" },
@@ -464,8 +456,8 @@ async function submitPaymentOrder() {
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || "付款凭证提交失败");
     paymentProofInput.value = "";
-    proofFileName.textContent = "选择付款截图";
-    paymentOrderStatus.textContent = `订单 ${data.order.orderNo} 已提交，等待管理员审核。`;
+    proofFileName.textContent = "付款截图（可选）";
+    paymentOrderStatus.textContent = `已提交“我已支付”：订单 ${data.order.orderNo}，等待管理员确认。`;
     await loadOrders();
   } catch (error) {
     paymentOrderStatus.textContent = error.message;
@@ -922,7 +914,7 @@ paymentQrDialog.addEventListener("click", (event) => {
   if (event.target === paymentQrDialog) paymentQrDialog.close();
 });
 paymentProofInput.addEventListener("change", () => {
-  proofFileName.textContent = paymentProofInput.files?.[0]?.name || "选择付款截图";
+  proofFileName.textContent = paymentProofInput.files?.[0]?.name || "付款截图（可选）";
 });
 submitPaymentOrderButton.addEventListener("click", submitPaymentOrder);
 redeemButton.addEventListener("click", redeemCode);
