@@ -15,6 +15,7 @@ const memoryPath = path.join(dataDir, "team-memory.json");
 const usersPath = path.join(dataDir, "users.json");
 const ordersPath = path.join(dataDir, "orders.json");
 const redeemCodesPath = path.join(dataDir, "redeem-codes.json");
+const paymentProofsDir = path.join(dataDir, "payment-proofs");
 
 async function loadLocalEnv() {
   const envPath = path.join(__dirname, ".env.local");
@@ -77,7 +78,16 @@ const liveClients = new Set();
 
 async function readJson(req) {
   const chunks = [];
-  for await (const chunk of req) chunks.push(chunk);
+  let size = 0;
+  for await (const chunk of req) {
+    size += chunk.length;
+    if (size > 6 * 1024 * 1024) {
+      const error = new Error("Request body too large");
+      error.status = 413;
+      throw error;
+    }
+    chunks.push(chunk);
+  }
   const text = Buffer.concat(chunks).toString("utf8").replace(/^\uFEFF/, "");
   return JSON.parse(text || "{}");
 }
@@ -311,6 +321,46 @@ function publicRedeemCode(code) {
     createdAtIso: code.createdAtIso,
     usedAtIso: code.usedAtIso || "",
     usedByPhone: code.usedByPhone || "",
+  };
+}
+
+function parseProofDataUrl(value) {
+  const match = String(value || "").match(/^data:(image\/(?:jpeg|png|webp));base64,([A-Za-z0-9+/=\s]+)$/);
+  if (!match) return null;
+  const buffer = Buffer.from(match[2].replace(/\s+/g, ""), "base64");
+  if (!buffer.length || buffer.length > 3 * 1024 * 1024) return null;
+  const extensions = { "image/jpeg": "jpg", "image/png": "png", "image/webp": "webp" };
+  return { buffer, contentType: match[1], extension: extensions[match[1]] };
+}
+
+async function savePaymentProof(orderId, dataUrl) {
+  const proof = parseProofDataUrl(dataUrl);
+  if (!proof) return null;
+  await mkdir(paymentProofsDir, { recursive: true });
+  const fileName = `${orderId}.${proof.extension}`;
+  await writeFile(path.join(paymentProofsDir, fileName), proof.buffer);
+  return { fileName, contentType: proof.contentType };
+}
+
+function publicOrder(order) {
+  return {
+    id: order.id,
+    orderNo: order.orderNo,
+    userId: order.userId,
+    phone: order.phone,
+    planId: order.planId,
+    planName: order.planName,
+    amount: order.amount,
+    credits: order.credits,
+    status: order.status,
+    paymentMethod: order.paymentMethod || "",
+    payerName: order.payerName || "",
+    payNote: order.payNote || "",
+    hasProof: Boolean(order.proofFileName),
+    createdAtIso: order.createdAtIso,
+    approvedAtIso: order.approvedAtIso || "",
+    rejectedAtIso: order.rejectedAtIso || "",
+    rejectReason: order.rejectReason || "",
   };
 }
 
@@ -597,6 +647,21 @@ async function createOrder(req, res) {
     sendJson(res, 422, { error: "请选择有效套餐" });
     return;
   }
+  const paymentMethod = String(payload.paymentMethod || "");
+  const payerName = String(payload.payerName || "").trim().slice(0, 60);
+  if (!["wechat", "alipay"].includes(paymentMethod)) {
+    sendJson(res, 422, { error: "请选择付款方式" });
+    return;
+  }
+  if (!payerName) {
+    sendJson(res, 422, { error: "请填写付款昵称或姓名" });
+    return;
+  }
+  const proof = parseProofDataUrl(payload.proofDataUrl);
+  if (!proof) {
+    sendJson(res, 422, { error: "请上传不超过 3MB 的 JPG、PNG 或 WebP 付款截图" });
+    return;
+  }
   const orders = await readOrders();
   const order = {
     id: randomUUID(),
@@ -608,20 +673,27 @@ async function createOrder(req, res) {
     amount: plan.price,
     credits: plan.credits,
     status: "pending",
+    paymentMethod,
+    payerName,
     payNote: String(payload.payNote || "").slice(0, 200),
     createdAtIso: new Date().toISOString(),
     approvedAtIso: "",
+    rejectedAtIso: "",
+    rejectReason: "",
   };
+  const savedProof = await savePaymentProof(order.id, payload.proofDataUrl);
+  order.proofFileName = savedProof.fileName;
+  order.proofContentType = savedProof.contentType;
   orders.unshift(order);
   await writeOrders(orders);
-  sendJson(res, 200, { order });
+  sendJson(res, 200, { order: publicOrder(order) });
 }
 
 async function myOrders(req, res) {
   const user = await requireUser(req, res);
   if (!user) return;
   const orders = await readOrders();
-  sendJson(res, 200, { orders: orders.filter((order) => order.userId === user.id).slice(0, 20) });
+  sendJson(res, 200, { orders: orders.filter((order) => order.userId === user.id).slice(0, 20).map(publicOrder) });
 }
 
 async function myPredictions(req, res) {
@@ -640,7 +712,7 @@ async function myPredictions(req, res) {
 async function adminOrders(req, res) {
   if (!requireAdmin(req, res)) return;
   const orders = await readOrders();
-  sendJson(res, 200, { orders: orders.slice(0, 100) });
+  sendJson(res, 200, { orders: orders.slice(0, 100).map(publicOrder) });
 }
 
 async function adminOverview(req, res) {
@@ -711,6 +783,14 @@ async function approveOrder(req, res) {
     sendJson(res, 404, { error: "订单不存在" });
     return;
   }
+  if (order.status === "approved") {
+    sendJson(res, 409, { error: "订单已经到账，不能重复确认" });
+    return;
+  }
+  if (order.status === "rejected") {
+    sendJson(res, 409, { error: "订单已驳回，不能直接确认" });
+    return;
+  }
   const plan = membershipPlans[order.planId];
   const data = await readUsers();
   const user = data.users.find((item) => item.id === order.userId);
@@ -725,7 +805,48 @@ async function approveOrder(req, res) {
   order.approvedAtIso = new Date().toISOString();
   await writeUsers(data);
   await writeOrders(orders);
-  sendJson(res, 200, { order, user: publicUser(user) });
+  sendJson(res, 200, { order: publicOrder(order), user: publicUser(user) });
+}
+
+async function rejectOrder(req, res) {
+  if (!requireAdmin(req, res)) return;
+  const payload = await readJson(req);
+  const orders = await readOrders();
+  const order = orders.find((item) => item.id === payload.orderId || item.orderNo === payload.orderNo);
+  if (!order) {
+    sendJson(res, 404, { error: "订单不存在" });
+    return;
+  }
+  if (order.status !== "pending") {
+    sendJson(res, 409, { error: "只有待审核订单可以驳回" });
+    return;
+  }
+  order.status = "rejected";
+  order.rejectedAtIso = new Date().toISOString();
+  order.rejectReason = String(payload.reason || "付款信息未核实").slice(0, 120);
+  await writeOrders(orders);
+  sendJson(res, 200, { order: publicOrder(order) });
+}
+
+async function adminPaymentProof(req, res, routeUrl) {
+  if (!requireAdmin(req, res)) return;
+  const orderId = routeUrl.searchParams.get("orderId");
+  const orders = await readOrders();
+  const order = orders.find((item) => item.id === orderId);
+  if (!order?.proofFileName) {
+    sendJson(res, 404, { error: "付款凭证不存在" });
+    return;
+  }
+  const filePath = path.join(paymentProofsDir, path.basename(order.proofFileName));
+  if (!existsSync(filePath)) {
+    sendJson(res, 404, { error: "付款凭证文件不存在" });
+    return;
+  }
+  res.writeHead(200, {
+    "content-type": order.proofContentType || "image/jpeg",
+    "cache-control": "private, no-store",
+  });
+  res.end(await readFile(filePath));
 }
 
 async function redeemCode(req, res) {
@@ -1595,7 +1716,8 @@ async function serveStatic(req, res) {
 
 createServer(async (req, res) => {
   try {
-    const route = new URL(req.url, `http://${req.headers.host}`).pathname;
+    const routeUrl = new URL(req.url, `http://${req.headers.host}`);
+    const route = routeUrl.pathname;
     if (req.method === "GET" && route === "/api/config") {
       sendJson(res, 200, publicConfig());
       return;
@@ -1642,6 +1764,14 @@ createServer(async (req, res) => {
     }
     if (req.method === "POST" && route === "/api/admin/orders/approve") {
       await approveOrder(req, res);
+      return;
+    }
+    if (req.method === "POST" && route === "/api/admin/orders/reject") {
+      await rejectOrder(req, res);
+      return;
+    }
+    if (req.method === "GET" && route === "/api/admin/orders/proof") {
+      await adminPaymentProof(req, res, routeUrl);
       return;
     }
     if (req.method === "GET" && route === "/api/admin/redeem-codes") {
@@ -1703,7 +1833,7 @@ createServer(async (req, res) => {
     res.writeHead(405, { "content-type": "text/plain; charset=utf-8" });
     res.end("Method not allowed");
   } catch (error) {
-    sendJson(res, 500, { error: error.message });
+    sendJson(res, error.status || 500, { error: error.message });
   }
 }).listen(port, host, () => {
   console.log(`WorldCup local demo: http://${host}:${port}`);

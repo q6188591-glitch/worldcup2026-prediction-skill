@@ -68,6 +68,12 @@ const closePaymentQrButton = document.querySelector("#closePaymentQr");
 const selectedPlanText = document.querySelector("#selectedPlanText");
 const payeeName = document.querySelector("#payeeName");
 const paymentHint = document.querySelector("#paymentHint");
+const paymentMethodSelect = document.querySelector("#paymentMethod");
+const payerNameInput = document.querySelector("#payerName");
+const paymentProofInput = document.querySelector("#paymentProof");
+const proofFileName = document.querySelector("#proofFileName");
+const submitPaymentOrderButton = document.querySelector("#submitPaymentOrder");
+const paymentOrderStatus = document.querySelector("#paymentOrderStatus");
 const redeemCodeInput = document.querySelector("#redeemCode");
 const redeemButton = document.querySelector("#redeemButton");
 const redeemStatus = document.querySelector("#redeemStatus");
@@ -99,6 +105,7 @@ let currentUser = null;
 let plans = [];
 let selectedPlanId = "";
 let payment = {};
+let knownOrderStatuses = null;
 
 function apiPath(path) {
   return `api/${path.replace(/^\//, "")}`;
@@ -305,8 +312,8 @@ function renderPayment() {
   payeeName.textContent = payment.payeeName ? `收款方：${payment.payeeName}` : "";
   paymentHint.textContent = plan
     ? isTestPlan(plan)
-      ? "测试专用：付款 0.01 元后生成测试充值码验证流程。"
-      : "扫码付款后，联系管理员获取对应套餐充值码。"
+      ? "测试专用：付款 0.01 元后上传凭证，审核通过自动到账。"
+      : "扫码付款后上传凭证，管理员确认后次数自动到账。"
     : "选择次数包后再扫码付款。";
   setPaymentEntry(openWechatQrButton, payment.wechatQrUrl);
   setPaymentEntry(openAlipayQrButton, payment.alipayQrUrl);
@@ -316,11 +323,12 @@ function renderOrders(container, orders) {
   container.innerHTML = "";
   for (const order of orders) {
     const row = document.createElement("div");
-    row.className = "order-item";
+    const statusLabel = order.status === "approved" ? "已到账" : order.status === "rejected" ? "已驳回" : "待审核";
+    row.className = `order-item is-${order.status}`;
     row.innerHTML = `
       <strong>${order.planName} · ￥${order.amount}</strong>
-      <span>${order.phone || ""} ${order.orderNo}</span>
-      <small>${order.status === "approved" ? "已到账" : "待审核"} · ${order.credits || ""} 次 · ${formatTime(order.createdAtIso)}</small>
+      <span>${order.paymentMethod === "wechat" ? "微信" : order.paymentMethod === "alipay" ? "支付宝" : "充值码"} · ${order.orderNo}</span>
+      <small>${statusLabel} · ${order.credits || ""} 次 · ${formatTime(order.createdAtIso)}${order.rejectReason ? ` · ${order.rejectReason}` : ""}</small>
     `;
     container.append(row);
   }
@@ -377,6 +385,7 @@ async function submitAuth(mode) {
     });
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || "账号操作失败");
+    knownOrderStatuses = null;
     renderAccount(data.user);
     setAuthHint("登录成功。");
     loadOrders();
@@ -391,7 +400,74 @@ async function loadOrders() {
   if (!currentUser) return;
   const res = await fetch(apiPath("orders"));
   const data = await res.json();
-  if (res.ok) renderOrders(orderList, data.orders || []);
+  if (!res.ok) return;
+  const orders = data.orders || [];
+  if (knownOrderStatuses) {
+    const newlyApproved = orders.find((order) => order.status === "approved" && knownOrderStatuses.get(order.id) === "pending");
+    if (newlyApproved) {
+      paymentOrderStatus.textContent = `充值成功：${newlyApproved.planName}，已到账 ${newlyApproved.credits} 次。`;
+      const authRes = await fetch(apiPath("auth/me"));
+      const authData = await authRes.json();
+      if (authRes.ok && authData.user) renderAccount(authData.user);
+    }
+  }
+  knownOrderStatuses = new Map(orders.map((order) => [order.id, order.status]));
+  renderOrders(orderList, orders);
+}
+
+function fileAsDataUrl(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = () => reject(new Error("付款截图读取失败"));
+    reader.readAsDataURL(file);
+  });
+}
+
+async function submitPaymentOrder() {
+  const plan = selectedPlan();
+  const file = paymentProofInput.files?.[0];
+  if (!plan) {
+    paymentOrderStatus.textContent = "请先选择次数包。";
+    return;
+  }
+  if (!payerNameInput.value.trim()) {
+    paymentOrderStatus.textContent = "请填写付款昵称或姓名。";
+    return;
+  }
+  if (!file) {
+    paymentOrderStatus.textContent = "请上传付款截图。";
+    return;
+  }
+  if (file.size > 3 * 1024 * 1024) {
+    paymentOrderStatus.textContent = "付款截图不能超过 3MB。";
+    return;
+  }
+  submitPaymentOrderButton.disabled = true;
+  paymentOrderStatus.textContent = "正在提交付款凭证...";
+  try {
+    const proofDataUrl = await fileAsDataUrl(file);
+    const res = await fetch(apiPath("orders"), {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        planId: plan.id,
+        paymentMethod: paymentMethodSelect.value,
+        payerName: payerNameInput.value.trim(),
+        proofDataUrl,
+      }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || "付款凭证提交失败");
+    paymentProofInput.value = "";
+    proofFileName.textContent = "选择付款截图";
+    paymentOrderStatus.textContent = `订单 ${data.order.orderNo} 已提交，等待管理员审核。`;
+    await loadOrders();
+  } catch (error) {
+    paymentOrderStatus.textContent = error.message;
+  } finally {
+    submitPaymentOrderButton.disabled = false;
+  }
 }
 
 async function loadMyPredictions() {
@@ -832,6 +908,7 @@ loginButton.addEventListener("click", () => submitAuth("login").catch((error) =>
 registerButton.addEventListener("click", () => submitAuth("register").catch((error) => { accountMeta.textContent = error.message; }));
 logoutButton.addEventListener("click", async () => {
   await fetch(apiPath("auth/logout"), { method: "POST" });
+  knownOrderStatuses = null;
   renderAccount(null);
 });
 openWechatQrButton.addEventListener("click", () => openPaymentQr(payment.wechatQrUrl, "微信收款二维码", "wechat"));
@@ -840,6 +917,10 @@ closePaymentQrButton.addEventListener("click", () => paymentQrDialog.close());
 paymentQrDialog.addEventListener("click", (event) => {
   if (event.target === paymentQrDialog) paymentQrDialog.close();
 });
+paymentProofInput.addEventListener("change", () => {
+  proofFileName.textContent = paymentProofInput.files?.[0]?.name || "选择付款截图";
+});
+submitPaymentOrderButton.addEventListener("click", submitPaymentOrder);
 redeemButton.addEventListener("click", redeemCode);
 batchPredictButton.addEventListener("click", runBatchPrediction);
 refreshMemoryButton.addEventListener("click", refreshMemory);
@@ -855,3 +936,6 @@ loadConfig().catch((error) => {
 });
 loadLiveContext().then(connectLiveEvents).catch(() => connectLiveEvents());
 setInterval(loadRecords, 60 * 1000);
+setInterval(() => {
+  if (currentUser) loadOrders();
+}, 10 * 1000);

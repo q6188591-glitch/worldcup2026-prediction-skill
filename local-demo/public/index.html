@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>赛场罗盘 26 · 世界杯预测模板</title>
-    <link rel="stylesheet" href="styles.css?v=20260620-payment-qr-modal" />
+    <link rel="stylesheet" href="styles.css?v=20260620-payment-proof" />
   </head>
   <body>
     <div class="notice">AI 赛前推演模板，仅供球迷讨论与内容创作，不提供投注、赔率或下注建议。</div>
@@ -86,14 +86,30 @@
             <div class="pay-card pay-summary">
               <strong id="selectedPlanText">请选择次数包</strong>
               <span id="payeeName"></span>
-              <small id="paymentHint">扫码付款后，联系管理员获取充值码。</small>
+              <small id="paymentHint">扫码付款后上传凭证，管理员确认后次数自动到账。</small>
             </div>
           </div>
+          <div class="payment-proof-form">
+            <select id="paymentMethod">
+              <option value="wechat">微信支付</option>
+              <option value="alipay">支付宝</option>
+            </select>
+            <input id="payerName" placeholder="付款昵称或姓名" />
+            <label class="proof-upload">
+              <input id="paymentProof" type="file" accept="image/jpeg,image/png,image/webp" />
+              <span id="proofFileName">选择付款截图</span>
+            </label>
+            <button id="submitPaymentOrder" type="button">提交付款凭证</button>
+          </div>
+          <div id="paymentOrderStatus" class="batch-status">付款后提交截图，审核通过会自动增加次数。</div>
+          <details class="redeem-fallback">
+            <summary>使用补发充值码</summary>
           <div class="order-row">
             <input id="redeemCode" placeholder="输入支付后获得的充值码" />
             <button id="redeemButton" type="button">兑换次数</button>
           </div>
           <div id="redeemStatus" class="batch-status">充值码兑换成功后，次数会自动到账。</div>
+          </details>
           <div class="user-section-title">我的充值记录</div>
           <div id="orderList" class="order-list"></div>
           <div class="user-section-title">我的预测记录</div>
@@ -259,6 +275,6 @@
       </div>
     </dialog>
 
-    <script src="app.js?v=20260620-payment-qr-modal"></script>
+    <script src="app.js?v=20260620-payment-proof"></script>
   </body>
 </html>

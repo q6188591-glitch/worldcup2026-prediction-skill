@@ -649,6 +649,42 @@ button.secondary:hover {
   align-content: center;
 }
 
+.payment-proof-form {
+  display: grid;
+  grid-template-columns: 180px 1fr 1fr max-content;
+  gap: 10px;
+  align-items: center;
+}
+
+.proof-upload {
+  display: grid;
+  place-items: center;
+  min-height: 44px;
+  padding: 8px 12px;
+  border: 1px dashed #9dbbab;
+  border-radius: 8px;
+  background: #f7fbf8;
+  color: #145a36;
+  cursor: pointer;
+  font-weight: 900;
+}
+
+.proof-upload input {
+  display: none;
+}
+
+.redeem-fallback {
+  border-top: 1px solid #dce8e0;
+  padding-top: 10px;
+}
+
+.redeem-fallback summary {
+  margin-bottom: 10px;
+  color: #66746b;
+  cursor: pointer;
+  font-weight: 900;
+}
+
 .payment-qr-dialog {
   width: min(82vmin, 620px);
   max-width: calc(100% - 24px);
@@ -707,6 +743,28 @@ button.secondary:hover {
   color: white;
   font-size: 28px;
   line-height: 1;
+}
+
+.proof-dialog {
+  width: min(92vw, 760px);
+  max-height: 88vh;
+  padding: 10px;
+  border: 0;
+  border-radius: 8px;
+  overflow: visible;
+  background: white;
+  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.32);
+}
+
+.proof-dialog::backdrop {
+  background: rgba(0, 0, 0, 0.72);
+}
+
+.proof-dialog img {
+  display: block;
+  width: 100%;
+  max-height: calc(88vh - 20px);
+  object-fit: contain;
 }
 
 .order-list {
@@ -770,6 +828,26 @@ button.secondary:hover {
 
 .order-item strong {
   color: #16261d;
+}
+
+.order-item.is-rejected {
+  border-color: #e4b5b5;
+  background: #fff5f5;
+}
+
+.admin-order-item {
+  grid-template-columns: minmax(160px, 0.7fr) minmax(220px, 1fr) minmax(260px, 1.2fr) max-content;
+}
+
+.order-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  justify-content: flex-end;
+}
+
+.order-actions button {
+  padding: 7px 10px;
 }
 
 .code-item {
@@ -1367,8 +1445,10 @@ pre {
   .user-center-grid,
   .order-row,
   .pay-grid,
+  .payment-proof-form,
   .plan-grid,
   .order-item,
+  .admin-order-item,
   .code-item,
   .prediction-history-row,
   .batch-controls,

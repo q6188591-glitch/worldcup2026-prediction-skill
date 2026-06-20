@@ -12,6 +12,9 @@ const adminCodes = document.querySelector("#adminCodes");
 const adminUsers = document.querySelector("#adminUsers");
 const adminOrders = document.querySelector("#adminOrders");
 const refreshOrdersButton = document.querySelector("#refreshOrders");
+const proofDialog = document.querySelector("#proofDialog");
+const proofImage = document.querySelector("#proofImage");
+const closeProofButton = document.querySelector("#closeProof");
 
 let plans = [];
 let latestGeneratedCodes = [];
@@ -139,15 +142,63 @@ function renderOrders(orders = []) {
   adminOrders.innerHTML = "";
   for (const order of orders) {
     const row = document.createElement("div");
-    row.className = "order-item";
+    const statusLabel = order.status === "approved" ? "已到账" : order.status === "rejected" ? "已驳回" : "待审核";
+    row.className = `order-item admin-order-item is-${order.status}`;
     row.innerHTML = `
       <strong>${order.planName} · ￥${price(order.amount)}</strong>
-      <span>${order.phone || ""} ${order.orderNo}</span>
-      <small>${order.status === "approved" ? "已到账" : "待审核"} · ${order.credits || ""} 次 · ${formatTime(order.createdAtIso)}</small>
+      <span>${order.phone || ""} · ${order.paymentMethod === "wechat" ? "微信" : order.paymentMethod === "alipay" ? "支付宝" : "充值码"} · ${order.payerName || ""}</span>
+      <small>${statusLabel} · ${order.credits || ""} 次 · ${order.orderNo} · ${formatTime(order.createdAtIso)}${order.rejectReason ? ` · ${order.rejectReason}` : ""}</small>
+      <div class="order-actions">
+        ${order.hasProof ? `<button type="button" data-action="proof">查看凭证</button>` : ""}
+        ${order.status === "pending" ? `<button type="button" data-action="approve">确认到账</button><button type="button" class="secondary" data-action="reject">驳回</button>` : ""}
+      </div>
     `;
+    row.querySelector('[data-action="proof"]')?.addEventListener("click", () => openProof(order.id).catch((error) => { adminStatus.textContent = error.message; }));
+    row.querySelector('[data-action="approve"]')?.addEventListener("click", () => approveOrder(order.id).catch((error) => { adminStatus.textContent = error.message; }));
+    row.querySelector('[data-action="reject"]')?.addEventListener("click", () => rejectOrder(order.id).catch((error) => { adminStatus.textContent = error.message; }));
     adminOrders.append(row);
   }
   if (!orders.length) adminOrders.innerHTML = `<div class="order-empty">暂无订单</div>`;
+}
+
+async function openProof(orderId) {
+  adminStatus.textContent = "正在读取付款凭证...";
+  const res = await fetch(`${apiPath("admin/orders/proof")}?orderId=${encodeURIComponent(orderId)}`, { headers: authHeaders() });
+  if (!res.ok) {
+    const data = await res.json();
+    throw new Error(data.error || "付款凭证读取失败");
+  }
+  const blob = await res.blob();
+  if (proofImage.src.startsWith("blob:")) URL.revokeObjectURL(proofImage.src);
+  proofImage.src = URL.createObjectURL(blob);
+  proofDialog.showModal();
+  adminStatus.textContent = "付款凭证已打开。";
+}
+
+async function approveOrder(orderId) {
+  const res = await fetch(apiPath("admin/orders/approve"), {
+    method: "POST",
+    headers: { "content-type": "application/json", ...authHeaders() },
+    body: JSON.stringify({ orderId }),
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || "确认到账失败");
+  adminStatus.textContent = `订单 ${data.order.orderNo} 已确认，${data.order.credits} 次已到账。`;
+  await refreshDashboard();
+}
+
+async function rejectOrder(orderId) {
+  const reason = window.prompt("请输入驳回原因", "付款信息未核实");
+  if (reason === null) return;
+  const res = await fetch(apiPath("admin/orders/reject"), {
+    method: "POST",
+    headers: { "content-type": "application/json", ...authHeaders() },
+    body: JSON.stringify({ orderId, reason }),
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || "驳回失败");
+  adminStatus.textContent = `订单 ${data.order.orderNo} 已驳回。`;
+  await refreshDashboard();
 }
 
 async function loadOverview() {
@@ -216,4 +267,8 @@ copyLatestCodesButton.addEventListener("click", async () => {
     return;
   }
   adminStatus.textContent = (await copyText(text)) ? `已复制 ${latestGeneratedCodes.length} 个充值码。` : "复制失败，请手动选择。";
+});
+closeProofButton.addEventListener("click", () => proofDialog.close());
+proofDialog.addEventListener("click", (event) => {
+  if (event.target === proofDialog) proofDialog.close();
 });
