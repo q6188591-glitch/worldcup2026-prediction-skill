@@ -73,6 +73,11 @@ const paymentConfig = {
   payeeName: process.env.PAYMENT_PAYEE_NAME || "",
 };
 const supportContact = process.env.ADMIN_CONTACT || "请联系网站管理员";
+const registrationLimits = {
+  perDevice: Math.max(1, Number(process.env.MAX_REGISTRATIONS_PER_DEVICE || 1)),
+  perIp: Math.max(1, Number(process.env.MAX_REGISTRATIONS_PER_IP || 5)),
+  ipWindowDays: Math.max(1, Number(process.env.REGISTRATION_IP_WINDOW_DAYS || 30)),
+};
 let liveContextCache = null;
 let liveContextPromise = null;
 const liveClients = new Set();
@@ -403,6 +408,32 @@ function clearSessionCookie() {
   return "wc_session=; Max-Age=0; Path=/; HttpOnly; SameSite=Lax";
 }
 
+function deviceCookie(deviceId) {
+  return `wc_device=${encodeURIComponent(deviceId)}; Max-Age=31536000; Path=/; HttpOnly; SameSite=Lax`;
+}
+
+function registrationHash(type, value) {
+  return createHmac("sha256", adminToken || primaryProvider.apiKey || "worldcup2026-registration")
+    .update(`${type}:${value}`)
+    .digest("hex");
+}
+
+function registrationDevice(req) {
+  const stored = String(parseCookies(req).wc_device || "");
+  const deviceId = /^[0-9a-f-]{36}$/i.test(stored) ? stored : randomUUID();
+  return { deviceId, hash: registrationHash("device", deviceId) };
+}
+
+function clientIp(req) {
+  const realIp = String(req.headers["x-real-ip"] || "").trim();
+  const forwarded = String(req.headers["x-forwarded-for"] || "")
+    .split(",")
+    .map((item) => item.trim())
+    .filter(Boolean)
+    .at(-1);
+  return realIp || forwarded || req.socket.remoteAddress || "unknown";
+}
+
 async function currentUser(req) {
   const token = parseCookies(req).wc_session;
   if (!token) return null;
@@ -626,6 +657,37 @@ async function register(req, res) {
     sendJson(res, 409, { error: "这个手机号已经注册" });
     return;
   }
+  const device = registrationDevice(req);
+  const ipHash = registrationHash("ip", clientIp(req));
+  const deviceRegistrations = data.users.filter((user) => user.registrationDeviceHash === device.hash).length;
+  if (deviceRegistrations >= registrationLimits.perDevice) {
+    sendJson(
+      res,
+      403,
+      {
+        error: `这台设备已经注册过账号，请直接登录已有账号或${supportContact}`,
+        code: "DEVICE_REGISTRATION_LIMIT",
+      },
+      { "set-cookie": deviceCookie(device.deviceId) },
+    );
+    return;
+  }
+  const windowStart = Date.now() - registrationLimits.ipWindowDays * 86400_000;
+  const ipRegistrations = data.users.filter(
+    (user) => user.registrationIpHash === ipHash && new Date(user.createdAtIso || 0).getTime() >= windowStart,
+  ).length;
+  if (ipRegistrations >= registrationLimits.perIp) {
+    sendJson(
+      res,
+      429,
+      {
+        error: `当前网络注册账号过多，请稍后再试或${supportContact}`,
+        code: "IP_REGISTRATION_LIMIT",
+      },
+      { "set-cookie": deviceCookie(device.deviceId) },
+    );
+    return;
+  }
   const user = {
     id: randomUUID(),
     phone,
@@ -634,12 +696,14 @@ async function register(req, res) {
     freePredictionsLeft: membershipPlans.trial3.credits,
     planName: "新用户免费",
     createdAtIso: new Date().toISOString(),
+    registrationDeviceHash: device.hash,
+    registrationIpHash: ipHash,
   };
   const token = randomUUID();
   data.users.push(user);
   data.sessions.push({ token, userId: user.id, createdAtIso: new Date().toISOString(), expiresAtIso: new Date(Date.now() + 30 * 86400_000).toISOString() });
   await writeUsers(data);
-  sendJson(res, 200, { user: publicUser(user) }, { "set-cookie": sessionCookie(token) });
+  sendJson(res, 200, { user: publicUser(user) }, { "set-cookie": [sessionCookie(token), deviceCookie(device.deviceId)] });
 }
 
 async function login(req, res) {

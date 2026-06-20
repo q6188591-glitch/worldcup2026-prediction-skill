@@ -235,7 +235,7 @@ function authValidationMessage() {
 }
 
 function setAuthHint(message = "") {
-  authHint.textContent = message || "新用户注册赠送 3 次预测，登录状态保持 30 天。";
+  authHint.textContent = message || "新用户注册赠送 3 次预测；每台设备限注册 1 个账号，登录状态保持 30 天。";
 }
 
 function planPrice(plan) {
