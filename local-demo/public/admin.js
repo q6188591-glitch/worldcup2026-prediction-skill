@@ -36,7 +36,7 @@ function formatTime(value) {
 
 function price(value) {
   const number = Number(value || 0);
-  return number.toFixed(number === 0.01 ? 2 : 1).replace(/\.0$/, "");
+  return number.toFixed(1).replace(/\.0$/, "");
 }
 
 async function copyText(text) {
@@ -105,8 +105,7 @@ function renderPlanOptions() {
   const current = adminPlanSelect.value || plans[0]?.id || "";
   adminPlanSelect.innerHTML = "";
   for (const plan of plans) {
-    const suffix = Number(plan.price) === 0.01 ? " · 测试" : "";
-    adminPlanSelect.add(new Option(`${plan.name} · ￥${price(plan.price)} · ${plan.credits} 次${suffix}`, plan.id));
+    adminPlanSelect.add(new Option(`${plan.name} · ￥${price(plan.price)} · ${plan.credits} 次`, plan.id));
   }
   adminPlanSelect.value = plans.some((plan) => plan.id === current) ? current : plans[0]?.id || "";
 }

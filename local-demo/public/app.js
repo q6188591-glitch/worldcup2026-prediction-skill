@@ -218,11 +218,7 @@ function setAuthHint(message = "") {
 
 function planPrice(plan) {
   const value = Number(plan?.price ?? plan?.amount ?? 0);
-  return value.toFixed(value === 0.01 ? 2 : 1).replace(/\.0$/, "");
-}
-
-function isTestPlan(plan) {
-  return plan?.id === "paytest" || Number(plan?.price) === 0.01;
+  return value.toFixed(1).replace(/\.0$/, "");
 }
 
 function accountLabel(user) {
@@ -259,9 +255,9 @@ function renderPlans() {
     button.type = "button";
     button.className = `plan-card${selectedPlanId === plan.id ? " is-selected" : ""}`;
     button.innerHTML = `
-      <strong>${plan.name}${isTestPlan(plan) ? `<em>测试</em>` : ""}</strong>
+      <strong>${plan.name}</strong>
       <span>￥${planPrice(plan)}</span>
-      <small>${plan.credits} 次预测${isTestPlan(plan) ? " · 跑通后删除" : ""}</small>
+      <small>${plan.credits} 次预测</small>
     `;
     button.addEventListener("click", () => {
       selectedPlanId = plan.id;
@@ -296,9 +292,7 @@ function renderPayment() {
   selectedPlanText.textContent = plan ? `当前应付 ￥${planPrice(plan)} · ${plan.name} · ${plan.credits} 次` : "请选择次数包";
   payeeName.textContent = payment.payeeName ? `收款方：${payment.payeeName}` : "";
   paymentHint.textContent = plan
-    ? isTestPlan(plan)
-      ? "测试专用：付款 0.01 元后点击“我已支付”，审核通过自动到账。"
-      : "扫码付款后点击“我已支付”，管理员按当前账号确认到账。"
+    ? "扫码付款后点击“我已支付”，管理员按当前账号确认到账。"
     : "选择次数包后再扫码付款。";
   setPaymentEntry(openWechatQrButton, payment.wechatQrUrl);
   setPaymentEntry(openAlipayQrButton, payment.alipayQrUrl);
