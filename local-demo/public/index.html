@@ -3,295 +3,273 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>赛场罗盘 26 · 世界杯预测模板</title>
-    <link rel="stylesheet" href="styles.css?v=20260620-mobile-layout" />
+    <meta name="theme-color" content="#07160f" />
+    <title>赛场罗盘 26 · 世界杯赛前情报中心</title>
+    <link rel="stylesheet" href="styles.css?v=20260622-broadcast-center" />
   </head>
   <body>
-    <div class="notice">AI 赛前推演模板，仅供球迷讨论与内容创作，不提供投注、赔率或下注建议。</div>
+    <div class="notice">AI 赛前推演，仅供球迷讨论与内容创作，不提供投注、赔率或下注建议。</div>
 
-    <main class="page">
+    <header class="site-header">
+      <a class="brand" href="#top" aria-label="赛场罗盘 26 首页">
+        <span class="brand-mark">26</span>
+        <span><strong>赛场罗盘</strong><small>WORLD CUP MATCH CENTER</small></span>
+      </a>
+      <nav class="site-nav" aria-label="主导航">
+        <a href="#match-center">今日比赛</a>
+        <a href="#predictor">预测台</a>
+        <a href="#data-center">数据中心</a>
+      </nav>
+      <a class="header-action" href="#account">登录 / 注册</a>
+    </header>
+
+    <main id="top">
       <section class="hero">
-        <div class="hero-copy">
-          <p class="eyebrow">FIFA WORLD CUP 2026 · MATCH INTELLIGENCE</p>
-          <h1>赛场罗盘 26</h1>
-          <p class="lead">把赛程、球队资料、每日情报和模型预测集中在一个面向球迷的赛前推演页面里。</p>
-          <div class="hero-meta">
-            <span>48 队</span>
-            <span>12 组</span>
-            <span>64 场</span>
-            <span>6.11 - 7.19</span>
+        <div class="hero-inner">
+          <div class="hero-copy">
+            <p class="eyebrow"><span class="live-dot"></span> FIFA WORLD CUP 2026 · MATCH INTELLIGENCE</p>
+            <h1>赛场罗盘 <b>26</b></h1>
+            <p class="lead">实时赛程、球队状态与 AI 推演汇入同一座比赛控制台。</p>
+            <div class="hero-actions">
+              <button id="heroPredictButton" type="button">立即免费预测</button>
+              <a href="#data-center">查看历史表现</a>
+            </div>
+            <div class="hero-meta">
+              <span><b>48</b> 支球队</span>
+              <span><b>12</b> 个小组</span>
+              <span><b>64</b> 场比赛</span>
+            </div>
           </div>
-        </div>
 
-        <aside class="quick-card">
-          <span class="card-label">下一步</span>
-          <strong>选择一场比赛</strong>
-          <p>点击焦点赛程自动填入预测台，也可以手动选择任意两队。</p>
-        </aside>
-      </section>
-
-      <div class="toolbar">
-        <div>
-          <span id="activeModelLabel">预测服务准备中</span>
-          <small id="activeBaseLabel">模型由服务器统一配置</small>
-        </div>
-      </div>
-
-      <section class="account-panel">
-        <div class="account-head">
-          <div>
-            <span id="accountStatus">未登录</span>
-            <small id="accountMeta">注册后赠送 3 次免费预测，每预测 1 场消耗 1 次</small>
-          </div>
-          <button id="logoutButton" class="secondary" type="button" hidden>退出登录</button>
-        </div>
-        <div id="authForms" class="auth-grid">
-          <label>
-            手机号
-            <input id="authPhone" inputmode="tel" autocomplete="tel" placeholder="输入手机号" />
-          </label>
-          <label>
-            密码
-            <input id="authPassword" type="password" autocomplete="current-password" placeholder="至少 6 位" />
-          </label>
-          <button id="loginButton" type="button">登录</button>
-          <button id="registerButton" class="secondary" type="button">注册</button>
-          <button id="contactAdminButton" class="secondary" type="button">联系管理员</button>
-          <small id="authHint" class="auth-hint">新用户注册赠送 3 次预测；每台设备限注册 1 个账号，登录状态保持 30 天。</small>
-        </div>
-        <div id="memberArea" class="member-area" hidden>
-          <div class="user-center-grid">
-            <div>
-              <span>当前账号</span>
-              <strong id="userCenterPhone">--</strong>
+          <aside class="featured-scoreboard" aria-label="下一场比赛">
+            <div class="scoreboard-head">
+              <span><i></i> NEXT MATCH</span>
+              <time id="featuredDate">赛程同步中</time>
             </div>
-            <div>
-              <span>剩余次数</span>
-              <strong id="userCenterCredits">--</strong>
+            <div class="featured-versus">
+              <div>
+                <span id="featuredFlagA" class="team-flag">--</span>
+                <strong id="featuredTeamA">主队</strong>
+              </div>
+              <b>VS</b>
+              <div>
+                <span id="featuredFlagB" class="team-flag">--</span>
+                <strong id="featuredTeamB">客队</strong>
+              </div>
             </div>
-            <div>
-              <span>当前权益</span>
-              <strong id="userCenterPlan">--</strong>
-            </div>
-          </div>
-          <div id="planGrid" class="plan-grid"></div>
-          <div class="pay-grid">
-            <button id="openWechatQr" class="pay-card pay-entry is-wechat" type="button">
-              <strong>微信扫码</strong>
-              <span>点击打开收款码</span>
-            </button>
-            <button id="openAlipayQr" class="pay-card pay-entry is-alipay" type="button">
-              <strong>支付宝扫码</strong>
-              <span>点击打开收款码</span>
-            </button>
-            <div class="pay-card pay-summary">
-              <strong id="selectedPlanText">请选择次数包</strong>
-              <span id="payeeName"></span>
-              <small id="paymentHint">扫码付款后上传凭证，管理员确认后次数自动到账。</small>
-            </div>
-          </div>
-          <div class="payment-proof-form">
-            <select id="paymentMethod">
-              <option value="wechat">微信支付</option>
-              <option value="alipay">支付宝</option>
-            </select>
-            <input id="payerName" placeholder="付款昵称（可选）" />
-            <button id="submitPaymentOrder" class="paid-confirm-button" type="button">我已支付</button>
-            <label class="proof-upload">
-              <input id="paymentProof" type="file" accept="image/jpeg,image/png,image/webp" />
-              <span id="proofFileName">付款截图（可选）</span>
-            </label>
-          </div>
-          <div id="paymentOrderStatus" class="batch-status">付款后点击“我已支付”，订单会绑定当前账号，审核通过自动增加次数。</div>
-          <details class="redeem-fallback">
-            <summary>使用补发充值码</summary>
-          <div class="order-row">
-            <input id="redeemCode" placeholder="输入支付后获得的充值码" />
-            <button id="redeemButton" type="button">兑换次数</button>
-          </div>
-          <div id="redeemStatus" class="batch-status">充值码兑换成功后，次数会自动到账。</div>
-          </details>
-          <details class="user-history-section">
-            <summary>
-              <strong>我的充值记录</strong>
-              <span id="orderHistoryCount">0 条</span>
-            </summary>
-            <div id="orderList" class="order-list"></div>
-          </details>
-          <details class="user-history-section">
-            <summary>
-              <strong>我的预测记录</strong>
-              <span id="predictionHistoryCount">0 场</span>
-            </summary>
-            <div id="myPredictionStats" class="batch-status">预测成功后会记录在这里。</div>
-            <div id="myPredictionList" class="prediction-history"></div>
-          </details>
+            <button id="featuredPredictButton" type="button">预测本场</button>
+            <small id="featuredMeta">实时赛程正在接入</small>
+          </aside>
         </div>
       </section>
 
-      <section class="live-panel">
-        <div>
-          <span id="liveStatus">实时情报连接中</span>
-          <small id="liveMeta">预测会自动带入最新新闻上下文</small>
-        </div>
-        <label class="live-toggle">
-          <input id="autoRePredict" type="checkbox" checked />
-          情报更新后自动重算当前对阵
-        </label>
-        <button id="refreshLive" class="secondary" type="button">刷新情报</button>
+      <section class="signal-strip" aria-label="平台数据">
+        <input id="autoRePredict" type="checkbox" checked hidden />
+        <div><span>LIVE</span><strong id="liveStatus">实时情报连接中</strong><small id="liveMeta">正在读取最新新闻上下文</small></div>
+        <div><span>MODEL</span><strong id="activeModelLabel">预测服务准备中</strong><small id="activeBaseLabel">模型由服务器统一配置</small></div>
+        <div><span>TRACKED</span><strong id="heroRecordCount">-- 场已复盘</strong><small id="heroRecordRate">命中数据同步中</small></div>
+        <button id="refreshLive" class="signal-refresh" type="button">刷新情报</button>
       </section>
 
-      <section class="layout">
-
-        <section class="panel focus">
-          <div class="section-title">
-            <span>01</span>
-            <h2>焦点赛程</h2>
+      <div class="page">
+        <section id="match-center" class="panel focus broadcast-panel">
+          <div class="section-head broadcast-head">
+            <div>
+              <p class="section-kicker">MATCHDAY LIVE</p>
+              <h2>今日焦点赛程</h2>
+            </div>
+            <span class="updated-badge">北京时间 · 自动更新</span>
           </div>
-          <div id="matchRail" class="match-rail"></div>
+          <div id="matchRail" class="match-rail">
+            <div class="match-skeleton"></div>
+            <div class="match-skeleton"></div>
+            <div class="match-skeleton"></div>
+            <div class="match-skeleton"></div>
+          </div>
         </section>
 
-        <section class="panel predictor">
-          <div class="section-title">
-            <span>02</span>
-            <h2>对阵预测台</h2>
-          </div>
-          <form id="predictForm" class="predict-form">
-            <label>
-              阶段
-              <select id="stage">
-                <option>小组赛</option>
-                <option>32 强</option>
-                <option>16 强</option>
-                <option>8 强</option>
-                <option>半决赛</option>
-                <option>决赛</option>
-              </select>
-            </label>
-            <div class="versus-grid">
-              <label>
-                主队
-                <select id="teamA"></select>
-              </label>
-              <div class="versus">VS</div>
-              <label>
-                客队
-                <select id="teamB"></select>
-              </label>
+        <section class="command-layout">
+          <section id="predictor" class="panel predictor command-panel">
+            <div class="section-head">
+              <div>
+                <p class="section-kicker">PREDICTION DESK</p>
+                <h2>对阵预测台</h2>
+              </div>
+              <span class="credit-note">每场消耗 1 次</span>
             </div>
-            <button type="submit">开始预测</button>
-            <div id="predictProgress" class="progress" hidden>
-              <span></span>
+            <form id="predictForm" class="predict-form">
+              <label class="stage-control">
+                比赛阶段
+                <select id="stage">
+                  <option>小组赛</option>
+                  <option>32 强</option>
+                  <option>16 强</option>
+                  <option>8 强</option>
+                  <option>半决赛</option>
+                  <option>决赛</option>
+                </select>
+              </label>
+              <div class="versus-grid">
+                <label>
+                  主队
+                  <select id="teamA"></select>
+                </label>
+                <div class="versus"><small>MATCH</small>VS</div>
+                <label>
+                  客队
+                  <select id="teamB"></select>
+                </label>
+              </div>
+              <button class="predict-submit" type="submit">生成本场预测</button>
+              <div id="predictProgress" class="progress" hidden><span></span></div>
+            </form>
+          </section>
+
+          <section class="panel result result-console">
+            <div class="section-head">
+              <div>
+                <p class="section-kicker">MODEL OUTPUT</p>
+                <h2>预测结果</h2>
+              </div>
+              <span class="result-state">AI 推演</span>
             </div>
-          </form>
+            <div class="prob-grid">
+              <div><span id="teamAName">主队</span><strong id="teamAProb">--</strong></div>
+              <div><span>平局</span><strong id="drawProb">--</strong></div>
+              <div><span id="teamBName">客队</span><strong id="teamBProb">--</strong></div>
+            </div>
+            <div class="result-meta">
+              <span>预测比分</span><b id="predictedScore">--</b>
+              <span>置信度</span><b id="confidence">--</b>
+            </div>
+            <ul id="factors" class="factors"></ul>
+            <p id="analysis" class="analysis">选择一场比赛，生成赛前推演。</p>
+            <div id="players" class="players"></div>
+            <details class="raw-output"><summary>查看原始数据</summary><pre id="rawJson">{}</pre></details>
+          </section>
         </section>
 
         <section class="panel batch-panel">
-          <div class="section-title">
-            <span>03</span>
-            <h2>一键批量预测</h2>
+          <div class="section-head">
+            <div>
+              <p class="section-kicker">MULTI MATCH</p>
+              <h2>一键批量预测</h2>
+            </div>
           </div>
           <div class="batch-controls">
-            <label>
-              比赛日期
-              <select id="batchDate"></select>
-            </label>
-            <button id="batchPredict" type="button">一键预测当天全部</button>
+            <label>比赛日期<select id="batchDate"></select></label>
+            <button id="batchPredict" type="button">预测当天全部比赛</button>
           </div>
-          <div id="batchStatus" class="batch-status">选择日期后开始批量预测，结果会自动保存到命中记录。</div>
+          <div id="batchStatus" class="batch-status">正在同步未来比赛日期。</div>
           <div id="batchResults" class="batch-results"></div>
         </section>
 
-        <section class="panel result">
-          <div class="section-title">
-            <span>04</span>
-            <h2>预测结果</h2>
-          </div>
-          <div class="prob-grid">
+        <section id="account" class="account-panel">
+          <div class="account-head">
             <div>
-              <span id="teamAName">墨西哥</span>
-              <strong id="teamAProb">--</strong>
+              <p class="section-kicker">MEMBER ACCESS</p>
+              <span id="accountStatus">未登录</span>
+              <small id="accountMeta">注册即赠 3 次免费预测，每预测 1 场消耗 1 次</small>
             </div>
-            <div>
-              <span>平局</span>
-              <strong id="drawProb">--</strong>
-            </div>
-            <div>
-              <span id="teamBName">南非</span>
-              <strong id="teamBProb">--</strong>
-            </div>
+            <button id="logoutButton" class="secondary" type="button" hidden>退出登录</button>
           </div>
-          <div class="result-meta">
-            <span>预测比分</span>
-            <b id="predictedScore">--</b>
-            <span>置信度</span>
-            <b id="confidence">--</b>
+          <div id="authForms" class="auth-grid">
+            <label>手机号<input id="authPhone" inputmode="tel" autocomplete="tel" placeholder="输入手机号" /></label>
+            <label>密码<input id="authPassword" type="password" autocomplete="current-password" placeholder="至少 6 位" /></label>
+            <button id="loginButton" type="button">登录</button>
+            <button id="registerButton" class="secondary" type="button">注册并领取 3 次</button>
+            <button id="contactAdminButton" class="secondary" type="button">联系管理员</button>
+            <small id="authHint" class="auth-hint">每台设备限注册 1 个账号，登录状态保持 30 天。</small>
           </div>
-          <ul id="factors" class="factors"></ul>
-          <p id="analysis" class="analysis">等待第一次预测。</p>
-          <div id="players" class="players"></div>
-          <details>
-            <summary>查看原始 JSON</summary>
-            <pre id="rawJson">{}</pre>
-          </details>
+          <div id="memberArea" class="member-area" hidden>
+            <div class="user-center-grid">
+              <div><span>当前账号</span><strong id="userCenterPhone">--</strong></div>
+              <div><span>剩余次数</span><strong id="userCenterCredits">--</strong></div>
+              <div><span>当前权益</span><strong id="userCenterPlan">--</strong></div>
+            </div>
+            <div id="planGrid" class="plan-grid"></div>
+            <div class="pay-grid">
+              <button id="openWechatQr" class="pay-card pay-entry is-wechat" type="button"><strong>微信扫码</strong><span>打开收款码</span></button>
+              <button id="openAlipayQr" class="pay-card pay-entry is-alipay" type="button"><strong>支付宝扫码</strong><span>打开收款码</span></button>
+              <div class="pay-card pay-summary"><strong id="selectedPlanText">请选择次数包</strong><span id="payeeName"></span><small id="paymentHint">扫码付款后点击“我已支付”。</small></div>
+            </div>
+            <div class="payment-proof-form">
+              <select id="paymentMethod"><option value="wechat">微信支付</option><option value="alipay">支付宝</option></select>
+              <input id="payerName" placeholder="付款昵称（可选）" />
+              <button id="submitPaymentOrder" class="paid-confirm-button" type="button">我已支付</button>
+              <label class="proof-upload"><input id="paymentProof" type="file" accept="image/jpeg,image/png,image/webp" /><span id="proofFileName">付款截图（可选）</span></label>
+            </div>
+            <div id="paymentOrderStatus" class="batch-status">订单会绑定当前账号，审核通过后自动增加次数。</div>
+            <details class="redeem-fallback">
+              <summary>使用补发充值码</summary>
+              <div class="order-row"><input id="redeemCode" placeholder="输入充值码" /><button id="redeemButton" type="button">兑换次数</button></div>
+              <div id="redeemStatus" class="batch-status">兑换成功后次数会自动到账。</div>
+            </details>
+            <details class="user-history-section"><summary><strong>我的充值记录</strong><span id="orderHistoryCount">0 条</span></summary><div id="orderList" class="order-list"></div></details>
+            <details class="user-history-section">
+              <summary><strong>我的预测记录</strong><span id="predictionHistoryCount">0 场</span></summary>
+              <div id="myPredictionStats" class="batch-status">预测成功后会记录在这里。</div>
+              <div id="myPredictionList" class="prediction-history"></div>
+            </details>
+          </div>
         </section>
 
-        <section class="panel schedule">
-          <div class="section-title">
-            <span>05</span>
-            <h2>赛程模板</h2>
+        <section id="data-center" class="data-center">
+          <div class="section-head data-center-head">
+            <div><p class="section-kicker">INTELLIGENCE HUB</p><h2>赛事数据中心</h2></div>
+            <p>赛程、历史表现与球队复盘</p>
           </div>
-          <div id="scheduleGrid" class="schedule-grid"></div>
-        </section>
+          <div class="data-tabs" role="tablist" aria-label="赛事数据中心">
+            <button class="data-tab is-active" type="button" role="tab" aria-selected="true" data-tab="schedule">赛程</button>
+            <button class="data-tab" type="button" role="tab" aria-selected="false" data-tab="records">命中记录</button>
+            <button class="data-tab" type="button" role="tab" aria-selected="false" data-tab="memory">球队复盘</button>
+          </div>
 
-        <section class="panel accuracy-board">
-          <div class="section-title">
-            <span>06</span>
-            <h2>命中记录</h2>
-          </div>
-          <div id="recordStats" class="record-stats"></div>
-          <div id="recordList" class="record-list"></div>
-        </section>
+          <section class="panel data-panel schedule is-active" data-panel="schedule">
+            <div class="section-head"><h2>完整赛程</h2><span class="updated-badge">未来 3 天优先展示</span></div>
+            <div id="scheduleGrid" class="schedule-grid"><div class="data-loading">正在同步赛程...</div></div>
+          </section>
 
-        <section class="panel memory-panel">
-          <div class="section-title">
-            <span>07</span>
-            <h2>小组赛复盘记忆</h2>
-          </div>
-          <div class="memory-controls">
-            <label>
-              采集范围
-              <select id="memoryTeam"></select>
-            </label>
-            <button id="refreshMemory" type="button">采集复盘记忆</button>
-          </div>
-          <div id="memoryStatus" class="batch-status">收录后会自动作为后续预测材料。</div>
-          <div id="memoryGrid" class="memory-grid"></div>
+          <section class="panel data-panel accuracy-board" data-panel="records" hidden>
+            <div class="section-head"><h2>历史命中表现</h2><span class="updated-badge dark">公开记录</span></div>
+            <div id="recordStats" class="record-stats"><div><strong>--</strong><span>统计同步中</span></div></div>
+            <div id="recordList" class="record-list"></div>
+          </section>
+
+          <section class="panel data-panel memory-panel" data-panel="memory" hidden>
+            <div class="section-head"><h2>球队复盘记忆</h2><span class="updated-badge">用于后续模型参考</span></div>
+            <div class="memory-controls">
+              <label>采集范围<select id="memoryTeam"></select></label>
+              <button id="refreshMemory" type="button">更新复盘材料</button>
+            </div>
+            <div id="memoryStatus" class="batch-status">正在读取球队复盘。</div>
+            <div id="memoryGrid" class="memory-grid"></div>
+          </section>
         </section>
 
         <section class="panel disclaimer">
-          <div class="section-title">
-            <span>08</span>
-            <h2>使用边界</h2>
-          </div>
-          <p>本模板面向赛前讨论、球迷社区和内容创作。预测结果来自模型推演和公开资料整理，不代表真实赛果保证，不应用于任何投注、赔率、付费推荐或违法场景。</p>
+          <div><p class="section-kicker">FAIR USE</p><h2>理性看球，独立判断</h2></div>
+          <p>预测结果来自模型推演与公开资料整理，不代表真实赛果保证，不应用于任何投注、赔率、付费推荐或违法场景。</p>
         </section>
-      </section>
+      </div>
     </main>
+
+    <nav class="mobile-dock" aria-label="移动端快捷导航">
+      <a href="#match-center">赛程</a>
+      <a class="dock-primary" href="#predictor">预测</a>
+      <a href="#data-center">数据</a>
+      <a href="#account">我的</a>
+    </nav>
 
     <dialog id="paymentQrDialog" class="payment-qr-dialog">
       <button id="closePaymentQr" class="qr-close" type="button" aria-label="关闭">×</button>
-      <div id="paymentQrCrop" class="payment-qr-crop">
-        <img id="paymentQrImage" alt="收款二维码" />
-      </div>
+      <div id="paymentQrCrop" class="payment-qr-crop"><img id="paymentQrImage" alt="收款二维码" /></div>
     </dialog>
-
     <dialog id="contactAdminDialog" class="contact-admin-dialog">
       <button id="closeContactAdmin" class="qr-close" type="button" aria-label="关闭">×</button>
-      <strong>联系管理员</strong>
-      <p id="contactAdminText">请联系网站管理员</p>
+      <strong>联系管理员</strong><p id="contactAdminText">请联系网站管理员</p>
     </dialog>
 
-    <script src="app.js?v=20260620-pricing-cleanup"></script>
+    <script src="app.js?v=20260622-broadcast-center"></script>
   </body>
 </html>

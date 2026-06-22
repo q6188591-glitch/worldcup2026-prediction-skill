@@ -80,6 +80,18 @@ const memoryTeamSelect = document.querySelector("#memoryTeam");
 const refreshMemoryButton = document.querySelector("#refreshMemory");
 const memoryStatus = document.querySelector("#memoryStatus");
 const memoryGrid = document.querySelector("#memoryGrid");
+const heroPredictButton = document.querySelector("#heroPredictButton");
+const featuredPredictButton = document.querySelector("#featuredPredictButton");
+const featuredDate = document.querySelector("#featuredDate");
+const featuredFlagA = document.querySelector("#featuredFlagA");
+const featuredFlagB = document.querySelector("#featuredFlagB");
+const featuredTeamA = document.querySelector("#featuredTeamA");
+const featuredTeamB = document.querySelector("#featuredTeamB");
+const featuredMeta = document.querySelector("#featuredMeta");
+const heroRecordCount = document.querySelector("#heroRecordCount");
+const heroRecordRate = document.querySelector("#heroRecordRate");
+const dataTabs = [...document.querySelectorAll(".data-tab")];
+const dataPanels = [...document.querySelectorAll(".data-panel")];
 let isPredicting = false;
 let isBatchPredicting = false;
 let predictRequestId = 0;
@@ -91,6 +103,7 @@ let selectedPlanId = "";
 let payment = {};
 let knownOrderStatuses = null;
 let supportContact = "请联系网站管理员";
+let featuredMatch = null;
 
 function apiPath(path) {
   return `api/${path.replace(/^\//, "")}`;
@@ -376,6 +389,7 @@ async function submitAuth(mode) {
     loadSchedule();
     loadRecords();
     loadMemory();
+    scrollToPredictor();
   } finally {
     loginButton.disabled = false;
     registerButton.disabled = false;
@@ -483,17 +497,41 @@ async function redeemCode() {
   }
 }
 
-function selectMatch(match) {
+function scrollToPredictor() {
+  document.querySelector("#predictor")?.scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
+function selectMatch(match, { scroll = true } = {}) {
   teamASelect.value = match.teamA;
   teamBSelect.value = match.teamB;
-  document.querySelector("#stage").value = "小组赛";
+  document.querySelector("#stage").value = stageForMatch(match);
   activeBaseLabel.textContent = `已选择：${match.teamA} vs ${match.teamB}`;
+  document.querySelectorAll(".match-card").forEach((card) => {
+    card.classList.toggle("is-selected", card.dataset.matchKey === `${match.teamA}|${match.teamB}`);
+  });
+  if (scroll) scrollToPredictor();
 }
 
 function renderSchedule() {
   matchRail.innerHTML = "";
   const futureMatches = schedule.filter(isPredictableMatch).sort((a, b) => matchTimeValue(a) - matchTimeValue(b));
   const upcoming = futureMatches.slice(0, 4);
+  featuredMatch = upcoming[0] || null;
+  if (featuredMatch) {
+    featuredDate.textContent = featuredMatch.date;
+    featuredFlagA.textContent = flag(featuredMatch.teamA) || "⚽";
+    featuredFlagB.textContent = flag(featuredMatch.teamB) || "⚽";
+    featuredTeamA.textContent = featuredMatch.teamA;
+    featuredTeamB.textContent = featuredMatch.teamB;
+    featuredMeta.textContent = `${featuredMatch.label} · 点击进入预测台`;
+  } else {
+    featuredDate.textContent = "赛程同步中";
+    featuredFlagA.textContent = "⚽";
+    featuredFlagB.textContent = "⚽";
+    featuredTeamA.textContent = "主队";
+    featuredTeamB.textContent = "客队";
+    featuredMeta.textContent = "实时赛程正在接入";
+  }
   if (!upcoming.length) {
     matchRail.innerHTML = `<div class="order-empty">正在等待最新赛程，稍后会自动刷新。</div>`;
   }
@@ -501,6 +539,7 @@ function renderSchedule() {
     const button = document.createElement("button");
     button.type = "button";
     button.className = "match-card";
+    button.dataset.matchKey = `${match.teamA}|${match.teamB}`;
     button.innerHTML = `
       <small>${index === 0 ? "下一场" : match.group} · ${match.date}</small>
       <strong>${flag(match.teamA)} ${match.teamA}</strong>
@@ -561,6 +600,8 @@ function renderRecords(data) {
   const outcomeHits = data?.outcomeHits ?? records.filter((item) => item.outcomeHit).length;
   const scoreHits = data?.scoreHits ?? records.filter((item) => item.scoreHit).length;
   const marginHits = data?.marginHits ?? records.filter((item) => item.marginHit).length;
+  heroRecordCount.textContent = `${records.length} 场已复盘`;
+  heroRecordRate.textContent = total ? `赛果方向命中 ${percent(outcomeHits, total)}` : "等待可统计预测";
 
   recordStats.innerHTML = `
     <div>
@@ -769,6 +810,9 @@ function renderPrediction(data) {
     card.innerHTML = `<small>${item.team}</small><strong>${item.player}</strong><span>${item.reason}</span>`;
     players.append(card);
   }
+  if (window.matchMedia("(max-width: 640px)").matches) {
+    document.querySelector(".result-console")?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
 }
 
 function renderBatchRow(match, state, dataOrMessage = "") {
@@ -850,6 +894,11 @@ async function runBatchPrediction() {
 form.addEventListener("submit", async (event) => {
   event.preventDefault();
   if (isPredicting) return;
+  if (!currentUser) {
+    setAuthHint("登录或注册后即可生成预测，新用户会自动获得 3 次免费机会。");
+    document.querySelector("#account")?.scrollIntoView({ behavior: "smooth", block: "start" });
+    return;
+  }
   const requestId = ++predictRequestId;
   setPredicting(true);
   activeBaseLabel.textContent = "正在请求模型...";
@@ -910,6 +959,26 @@ submitPaymentOrderButton.addEventListener("click", submitPaymentOrder);
 redeemButton.addEventListener("click", redeemCode);
 batchPredictButton.addEventListener("click", runBatchPrediction);
 refreshMemoryButton.addEventListener("click", refreshMemory);
+heroPredictButton.addEventListener("click", scrollToPredictor);
+featuredPredictButton.addEventListener("click", () => {
+  if (featuredMatch) selectMatch(featuredMatch);
+  else scrollToPredictor();
+});
+for (const tab of dataTabs) {
+  tab.addEventListener("click", () => {
+    const selected = tab.dataset.tab;
+    dataTabs.forEach((item) => {
+      const active = item === tab;
+      item.classList.toggle("is-active", active);
+      item.setAttribute("aria-selected", String(active));
+    });
+    dataPanels.forEach((panel) => {
+      const active = panel.dataset.panel === selected;
+      panel.hidden = !active;
+      panel.classList.toggle("is-active", active);
+    });
+  });
+}
 
 loadAuth().catch((error) => {
   accountMeta.textContent = error.message;
