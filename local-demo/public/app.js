@@ -92,6 +92,7 @@ const heroRecordCount = document.querySelector("#heroRecordCount");
 const heroRecordRate = document.querySelector("#heroRecordRate");
 const dataTabs = [...document.querySelectorAll(".data-tab")];
 const dataPanels = [...document.querySelectorAll(".data-panel")];
+const mobileDockLinks = [...document.querySelectorAll(".mobile-dock a[data-dock]")];
 let isPredicting = false;
 let isBatchPredicting = false;
 let predictRequestId = 0;
@@ -626,15 +627,25 @@ function renderRecords(data) {
   for (const item of records) {
     const row = document.createElement("div");
     const isUntracked = item.outcomeHit === null || item.scoreHit === null;
-    row.className = `record-row${isUntracked ? " is-untracked" : ""}`;
+    const rowState = isUntracked
+      ? "is-untracked"
+      : item.scoreHit
+        ? "is-perfect"
+        : item.outcomeHit || item.marginHit
+          ? "is-partial"
+          : "is-missed";
+    const outcomeState = isUntracked ? "status-pending" : item.outcomeHit ? "status-hit" : "status-miss";
+    const marginState = isUntracked ? "status-pending" : item.marginHit ? "status-hit" : "status-miss";
+    const scoreState = isUntracked ? "status-pending" : item.scoreHit ? "status-hit" : "status-miss";
+    row.className = `record-row ${rowState}`;
     row.innerHTML = `
       <strong>${flag(item.teamA)} ${item.teamA} <em>vs</em> ${flag(item.teamB)} ${item.teamB}</strong>
       <span>${item.group}</span>
       <b>预测 ${item.predicted ?? "未记录"}</b>
       <b>实际 ${item.actual}</b>
-      <mark>${isUntracked ? "未纳入统计" : item.outcomeHit ? "赛果命中" : "赛果未中"}</mark>
-      <mark>${isUntracked ? "未纳入统计" : item.marginHit ? "净胜命中" : "净胜未中"}</mark>
-      <mark>${isUntracked ? (item.note || "仅赛果记录") : item.scoreHit ? "比分命中" : "比分未中"}</mark>
+      <mark class="${outcomeState}">${isUntracked ? "待统计" : item.outcomeHit ? "赛果命中" : "赛果未中"}</mark>
+      <mark class="${marginState}">${isUntracked ? "待统计" : item.marginHit ? "净胜命中" : "净胜未中"}</mark>
+      <mark class="${scoreState}">${isUntracked ? (item.note || "待统计") : item.scoreHit ? "比分命中" : "比分未中"}</mark>
     `;
     recordList.append(row);
   }
@@ -979,6 +990,51 @@ for (const tab of dataTabs) {
     });
   });
 }
+
+const dockSections = mobileDockLinks
+  .map((link) => ({
+    link,
+    section: document.getElementById(link.dataset.dock),
+  }))
+  .filter((item) => item.section);
+let dockScrollFrame = 0;
+
+function setActiveDock(sectionId) {
+  for (const link of mobileDockLinks) {
+    const active = link.dataset.dock === sectionId;
+    link.classList.toggle("is-active", active);
+    if (active) link.setAttribute("aria-current", "page");
+    else link.removeAttribute("aria-current");
+  }
+}
+
+function updateActiveDock() {
+  dockScrollFrame = 0;
+  const threshold = window.scrollY + Math.min(window.innerHeight * 0.18, 160);
+  const orderedSections = [...dockSections].sort((a, b) => a.section.offsetTop - b.section.offsetTop);
+  let activeSectionId = orderedSections[0]?.link.dataset.dock || "match-center";
+
+  for (const item of orderedSections) {
+    if (item.section.offsetTop <= threshold) activeSectionId = item.link.dataset.dock;
+  }
+
+  const reachedPageEnd = window.scrollY + window.innerHeight >= document.documentElement.scrollHeight - 4;
+  if (reachedPageEnd && orderedSections.length) {
+    activeSectionId = orderedSections[orderedSections.length - 1].link.dataset.dock;
+  }
+
+  setActiveDock(activeSectionId);
+}
+
+window.addEventListener("scroll", () => {
+  if (dockScrollFrame) return;
+  dockScrollFrame = window.requestAnimationFrame(updateActiveDock);
+}, { passive: true });
+window.addEventListener("resize", updateActiveDock);
+for (const link of mobileDockLinks) {
+  link.addEventListener("click", () => setActiveDock(link.dataset.dock));
+}
+updateActiveDock();
 
 loadAuth().catch((error) => {
   accountMeta.textContent = error.message;

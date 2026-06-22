@@ -2589,12 +2589,106 @@ body {
 
 .accuracy-board {
   animation: none;
+  border-color: #193b2b;
+  background: #07160f;
+  color: #eef8f1;
+  box-shadow: 0 14px 34px rgba(7, 22, 15, 0.18);
+}
+
+.accuracy-board::before {
+  display: none;
+}
+
+.accuracy-board h2 {
+  color: #f4fff7;
+}
+
+.accuracy-board .record-stats div {
+  border-color: #28563d;
+  background: #10271c;
+}
+
+.accuracy-board .record-stats strong {
+  color: var(--broadcast-lime);
+}
+
+.accuracy-board .record-stats div:nth-child(3) strong,
+.accuracy-board .record-stats div:last-child strong {
+  color: var(--broadcast-lime);
 }
 
 .accuracy-board .updated-badge.dark {
   border-color: rgba(105, 238, 157, 0.26);
   background: rgba(105, 238, 157, 0.08);
   color: var(--broadcast-lime);
+}
+
+.accuracy-board .record-row {
+  position: relative;
+  border-color: #225039;
+  background: #10271c;
+}
+
+.accuracy-board .record-row::before {
+  content: "";
+  position: absolute;
+  inset: 8px auto 8px 0;
+  width: 3px;
+  border-radius: 0 3px 3px 0;
+  background: #66756d;
+}
+
+.accuracy-board .record-row.is-perfect::before {
+  background: var(--broadcast-lime);
+}
+
+.accuracy-board .record-row.is-partial::before {
+  background: var(--broadcast-gold);
+}
+
+.accuracy-board .record-row.is-missed::before {
+  background: #ef6a68;
+}
+
+.accuracy-board .record-row.is-untracked::before {
+  background: #d7a83f;
+}
+
+.accuracy-board .record-row:hover {
+  border-color: #347451;
+  background: #142e21;
+}
+
+.accuracy-board .record-row strong {
+  color: #f1f8f3;
+}
+
+.accuracy-board .record-row span,
+.accuracy-board .record-row b {
+  color: #a6b9ae;
+}
+
+.accuracy-board .record-row mark {
+  border-radius: 5px;
+  padding: 6px 9px;
+}
+
+.accuracy-board .record-row mark.status-hit {
+  border-color: rgba(105, 238, 157, 0.48);
+  background: rgba(38, 190, 103, 0.15);
+  color: #70f2a4;
+}
+
+.accuracy-board .record-row mark.status-miss {
+  border-color: rgba(239, 106, 104, 0.48);
+  background: rgba(239, 106, 104, 0.12);
+  color: #ff9693;
+}
+
+.accuracy-board .record-row mark.status-pending {
+  border-color: rgba(240, 200, 90, 0.48);
+  background: rgba(240, 200, 90, 0.12);
+  color: #f3d77d;
 }
 
 .memory-grid {
@@ -2841,11 +2935,12 @@ body {
     text-decoration: none;
   }
 
-  .mobile-dock .dock-primary {
+  .mobile-dock a.is-active {
     margin: 7px;
     height: calc(100% - 14px);
     border-radius: 5px;
     background: var(--broadcast-green);
     color: white;
+    box-shadow: 0 5px 16px rgba(23, 183, 100, 0.28);
   }
 }

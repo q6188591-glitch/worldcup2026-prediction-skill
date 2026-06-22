@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="theme-color" content="#07160f" />
     <title>赛场罗盘 26 · 世界杯赛前情报中心</title>
-    <link rel="stylesheet" href="styles.css?v=20260622-broadcast-center" />
+    <link rel="stylesheet" href="styles.css?v=20260622-record-status" />
   </head>
   <body>
     <div class="notice">AI 赛前推演，仅供球迷讨论与内容创作，不提供投注、赔率或下注建议。</div>
@@ -255,10 +255,10 @@
     </main>
 
     <nav class="mobile-dock" aria-label="移动端快捷导航">
-      <a href="#match-center">赛程</a>
-      <a class="dock-primary" href="#predictor">预测</a>
-      <a href="#data-center">数据</a>
-      <a href="#account">我的</a>
+      <a class="is-active" href="#match-center" data-dock="match-center" aria-current="page">赛程</a>
+      <a href="#predictor" data-dock="predictor">预测</a>
+      <a href="#data-center" data-dock="data-center">数据</a>
+      <a href="#account" data-dock="account">我的</a>
     </nav>
 
     <dialog id="paymentQrDialog" class="payment-qr-dialog">
@@ -270,6 +270,6 @@
       <strong>联系管理员</strong><p id="contactAdminText">请联系网站管理员</p>
     </dialog>
 
-    <script src="app.js?v=20260622-broadcast-center"></script>
+    <script src="app.js?v=20260622-record-status"></script>
   </body>
 </html>
