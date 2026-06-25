@@ -76,6 +76,8 @@ const batchDateSelect = document.querySelector("#batchDate");
 const batchPredictButton = document.querySelector("#batchPredict");
 const batchStatus = document.querySelector("#batchStatus");
 const batchResults = document.querySelector("#batchResults");
+const batchProviderButtons = [...document.querySelectorAll("[data-batch-provider]")];
+const recordProviderButtons = [...document.querySelectorAll("[data-record-provider]")];
 const memoryTeamSelect = document.querySelector("#memoryTeam");
 const refreshMemoryButton = document.querySelector("#refreshMemory");
 const memoryStatus = document.querySelector("#memoryStatus");
@@ -105,6 +107,9 @@ let payment = {};
 let knownOrderStatuses = null;
 let supportContact = "请联系网站管理员";
 let featuredMatch = null;
+let activeBatchProvider = "gpt";
+let activeRecordProvider = "gpt";
+let batchResultCache = new Map();
 
 function apiPath(path) {
   return `api/${path.replace(/^\//, "")}`;
@@ -595,14 +600,40 @@ function percent(count, total) {
   return `${Math.round((count / total) * 100)}%`;
 }
 
+function setProviderButtons(buttons, provider) {
+  for (const button of buttons) {
+    const isActive = button.dataset.batchProvider === provider || button.dataset.recordProvider === provider;
+    button.classList.toggle("is-active", isActive);
+    button.setAttribute("aria-selected", String(isActive));
+  }
+}
+
+function modelResultFor(data, provider) {
+  const results = Array.isArray(data?.modelResults) ? data.modelResults : [];
+  return results.find((item) => item.provider === provider) || null;
+}
+
+function modelScoreText(data, provider) {
+  const item = modelResultFor(data, provider);
+  if (!item) return { score: "--", note: "暂无模型结果", ok: false };
+  if (!item.ok || !item.result) return { score: "--", note: item.error || "模型未返回", ok: false };
+  return {
+    score: item.result.predictedScore || "--",
+    note: `${item.providerLabel || item.provider || "AI"} · ${item.result.confidence || "--"}`,
+    ok: true,
+  };
+}
+
 function renderRecords(data) {
   const records = data?.records ?? [];
   const total = data?.total ?? records.length;
   const outcomeHits = data?.outcomeHits ?? records.filter((item) => item.outcomeHit).length;
   const scoreHits = data?.scoreHits ?? records.filter((item) => item.scoreHit).length;
   const marginHits = data?.marginHits ?? records.filter((item) => item.marginHit).length;
+  const currentProvider = data?.provider || activeRecordProvider;
+  const currentProviderLabel = currentProvider === "deepseek" ? "DeepSeek" : currentProvider === "gpt" ? "GPT" : "全部模型";
   heroRecordCount.textContent = `${records.length} 场已复盘`;
-  heroRecordRate.textContent = total ? `赛果方向命中 ${percent(outcomeHits, total)}` : "等待可统计预测";
+  heroRecordRate.textContent = total ? `${currentProviderLabel} 赛果方向命中 ${percent(outcomeHits, total)}` : `${currentProviderLabel} 等待可统计预测`;
 
   recordStats.innerHTML = `
     <div>
@@ -622,6 +653,7 @@ function renderRecords(data) {
       <span>比分命中 ${scoreHits}/${total}</span>
     </div>
   `;
+  recordStats.querySelector("span").textContent = `${currentProviderLabel} · ${formatTime(data?.updatedAtIso)}`;
 
   recordList.innerHTML = "";
   for (const item of records) {
@@ -702,8 +734,9 @@ async function loadLiveContext({ force = false } = {}) {
 }
 
 async function loadRecords() {
+  setProviderButtons(recordProviderButtons, activeRecordProvider);
   try {
-    const res = await fetch(apiPath("records"));
+    const res = await fetch(`${apiPath("records")}?provider=${encodeURIComponent(activeRecordProvider)}`, { cache: "no-store" });
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || "命中记录刷新失败");
     renderRecords(data);
@@ -897,6 +930,31 @@ function renderBatchRow(match, state, dataOrMessage = "") {
   if (!existing) batchResults.append(row);
 }
 
+function renderBatchModelRow(match, state, dataOrMessage = "") {
+  const key = `${match.teamA}-${match.teamB}`;
+  const existing = batchResults.querySelector(`[data-match-key="${key}"]`);
+  const row = existing || document.createElement("div");
+  row.className = `batch-row is-${state}`;
+  row.dataset.matchKey = key;
+  const providerLabel = activeBatchProvider === "deepseek" ? "DeepSeek" : "GPT";
+  const modelView = typeof dataOrMessage === "object" ? modelScoreText(dataOrMessage, activeBatchProvider) : null;
+  const note = typeof dataOrMessage === "string" ? dataOrMessage : modelView?.note || "";
+  row.innerHTML = `
+    <strong>${flag(match.teamA)} ${match.teamA} <em>vs</em> ${flag(match.teamB)} ${match.teamB}</strong>
+    <span>${match.group} · ${match.date}</span>
+    <b>${state === "done" ? `${providerLabel} ${modelView?.ok ? `预测 ${modelView.score}` : "未返回"}` : state === "error" ? "失败" : "预测中"}</b>
+    <small>${note}</small>
+  `;
+  if (!existing) batchResults.append(row);
+}
+
+function rerenderBatchResults() {
+  setProviderButtons(batchProviderButtons, activeBatchProvider);
+  for (const item of batchResultCache.values()) {
+    renderBatchModelRow(item.match, item.state, item.data);
+  }
+}
+
 async function runBatchPrediction() {
   if (isBatchPredicting) return;
   const day = batchDateSelect.value;
@@ -919,11 +977,14 @@ async function runBatchPrediction() {
   batchPredictButton.disabled = true;
   batchDateSelect.disabled = true;
   batchResults.innerHTML = "";
+  batchResultCache = new Map();
+  setProviderButtons(batchProviderButtons, activeBatchProvider);
   batchStatus.textContent = `正在预测 ${day} 的 ${matches.length} 场比赛...`;
 
   let okCount = 0;
   for (const match of matches) {
-    renderBatchRow(match, "running");
+    batchResultCache.set(`${match.teamA}-${match.teamB}`, { match, state: "running", data: "" });
+    renderBatchModelRow(match, "running");
     try {
       const res = await fetch(apiPath("predict"), {
         method: "POST",
@@ -939,12 +1000,14 @@ async function runBatchPrediction() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.hint || data.detail || data.error || "请求失败");
       okCount += 1;
-      renderBatchRow(match, "done", data);
+      batchResultCache.set(`${match.teamA}-${match.teamB}`, { match, state: "done", data });
+      renderBatchModelRow(match, "done", data);
       renderPrediction(data);
       if (data.user) renderAccount(data.user);
       loadMyPredictions();
     } catch (error) {
-      renderBatchRow(match, "error", error.message);
+      batchResultCache.set(`${match.teamA}-${match.teamB}`, { match, state: "error", data: error.message });
+      renderBatchModelRow(match, "error", error.message);
     }
   }
 
@@ -998,6 +1061,20 @@ refreshLiveButton.addEventListener("click", () => {
   loadLiveContext({ force: true });
   loadRecords();
 });
+
+for (const button of batchProviderButtons) {
+  button.addEventListener("click", () => {
+    activeBatchProvider = button.dataset.batchProvider || "gpt";
+    rerenderBatchResults();
+  });
+}
+
+for (const button of recordProviderButtons) {
+  button.addEventListener("click", () => {
+    activeRecordProvider = button.dataset.recordProvider || "gpt";
+    loadRecords();
+  });
+}
 
 loginButton.addEventListener("click", () => submitAuth("login").catch((error) => { setAuthHint(error.message); }));
 registerButton.addEventListener("click", () => submitAuth("register").catch((error) => { setAuthHint(error.message); }));
@@ -1089,6 +1166,8 @@ for (const link of mobileDockLinks) {
   link.addEventListener("click", () => setActiveDock(link.dataset.dock));
 }
 updateActiveDock();
+setProviderButtons(batchProviderButtons, activeBatchProvider);
+setProviderButtons(recordProviderButtons, activeRecordProvider);
 
 loadAuth().catch((error) => {
   accountMeta.textContent = error.message;

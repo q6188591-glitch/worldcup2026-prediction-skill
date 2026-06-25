@@ -534,6 +534,10 @@ function predictionKey(teamA, teamB) {
   return `${teamA}|${teamB}`;
 }
 
+function providerPredictionKey(provider, teamA, teamB) {
+  return `${provider || "primary"}|${teamA}|${teamB}`;
+}
+
 function reverseScore(score) {
   const [a, b] = String(score || "").split("-");
   return a !== undefined && b !== undefined ? `${b}-${a}` : score;
@@ -547,7 +551,10 @@ async function readSavedPredictions() {
   try {
     const text = await readFile(predictionsPath, "utf8");
     const data = JSON.parse(text);
-    return new Map((Array.isArray(data) ? data : []).map((item) => [predictionKey(item.teamA, item.teamB), item]));
+    return new Map((Array.isArray(data) ? data : []).map((item) => [
+      item.key || (item.provider ? providerPredictionKey(item.provider, item.teamA, item.teamB) : predictionKey(item.teamA, item.teamB)),
+      item,
+    ]));
   } catch (error) {
     if (error.code === "ENOENT") return new Map();
     throw error;
@@ -601,12 +608,17 @@ function withTimeout(promise, ms, message) {
   return Promise.race([promise, timeout]).finally(() => clearTimeout(timeoutId));
 }
 
-async function savePredictionSnapshot(payload, result) {
+async function savePredictionSnapshot(payload, result, provider = {}) {
   if (!result?.predictedScore || !payload.teamA || !payload.teamB) return;
   const saved = await readSavedPredictions();
-  const key = predictionKey(payload.teamA, payload.teamB);
+  const key = provider.id
+    ? providerPredictionKey(provider.id, payload.teamA, payload.teamB)
+    : predictionKey(payload.teamA, payload.teamB);
   saved.set(key, {
     key,
+    provider: provider.id || "",
+    providerLabel: provider.label || "",
+    model: provider.model || "",
     teamA: payload.teamA,
     teamB: payload.teamB,
     group: payload.group || "",
@@ -1275,7 +1287,14 @@ async function predictWithComparison(req, res) {
   }
 
   const result = successful.result;
-  await savePredictionSnapshot(payload, result);
+  for (const item of modelResults) {
+    if (!item.ok || !item.result?.predictedScore) continue;
+    await savePredictionSnapshot(payload, item.result, {
+      id: item.provider,
+      label: item.providerLabel,
+      model: item.model,
+    });
+  }
   await saveUserPrediction(account, payload, result);
   const updatedUser = await consumePredictionQuota(account.id);
   sendJson(res, 200, {
@@ -1686,13 +1705,20 @@ async function schedule(req, res) {
   }
 }
 
-function applySavedPrediction(record, savedPredictions) {
-  const direct = savedPredictions.get(predictionKey(record.teamA, record.teamB));
-  const reverse = savedPredictions.get(predictionKey(record.teamB, record.teamA));
+function applySavedPrediction(record, savedPredictions, provider = "") {
+  const direct = provider
+    ? savedPredictions.get(providerPredictionKey(provider, record.teamA, record.teamB))
+    : savedPredictions.get(predictionKey(record.teamA, record.teamB));
+  const reverse = provider
+    ? savedPredictions.get(providerPredictionKey(provider, record.teamB, record.teamA))
+    : savedPredictions.get(predictionKey(record.teamB, record.teamA));
   if (direct) {
     return {
       ...record,
       predicted: direct.predicted,
+      provider: direct.provider || provider || "",
+      providerLabel: direct.providerLabel || "",
+      model: direct.model || "",
       group: direct.group || record.group,
       note: "",
     };
@@ -1701,28 +1727,39 @@ function applySavedPrediction(record, savedPredictions) {
     return {
       ...record,
       predicted: reverseScore(reverse.predicted),
+      provider: reverse.provider || provider || "",
+      providerLabel: reverse.providerLabel || "",
+      model: reverse.model || "",
       group: reverse.group || record.group,
       note: "",
+    };
+  }
+  if (provider) {
+    return {
+      ...record,
+      predicted: null,
+      provider,
+      note: "未找到该模型赛前预测",
     };
   }
   return record;
 }
 
-function mergeCompletedRecords(primaryRecords, localRecords, savedPredictions = new Map()) {
+function mergeCompletedRecords(primaryRecords, localRecords, savedPredictions = new Map(), provider = "") {
   const merged = new Map();
   for (const record of localRecords) {
-    const withPrediction = applySavedPrediction(record, savedPredictions);
+    const withPrediction = applySavedPrediction(record, savedPredictions, provider);
     merged.set(unorderedMatchKey(withPrediction.teamA, withPrediction.teamB), withPrediction);
   }
   for (const record of primaryRecords) {
-    const withPrediction = applySavedPrediction(record, savedPredictions);
+    const withPrediction = applySavedPrediction(record, savedPredictions, provider);
     merged.set(unorderedMatchKey(withPrediction.teamA, withPrediction.teamB), withPrediction);
   }
   return [...merged.values()];
 }
 
-function summarizeRecords(records, sourceError = "") {
-  const normalized = records
+function summarizeRecords(records, sourceError = "", provider = "") {
+  const normalizedAll = records
     .map((item) => ({
       ...item,
       outcomeHit: item.predicted ? scoreOutcome(item.predicted) === scoreOutcome(item.actual) : null,
@@ -1730,6 +1767,7 @@ function summarizeRecords(records, sourceError = "") {
       marginHit: item.predicted ? scoreMargin(item.predicted) === scoreMargin(item.actual) : null,
     }))
     .sort((a, b) => matchDateValue(b.date) - matchDateValue(a.date));
+  const normalized = provider ? normalizedAll.filter((item) => item.predicted) : normalizedAll;
 
   const scored = normalized.filter((item) => item.outcomeHit !== null && item.scoreHit !== null);
   const total = scored.length;
@@ -1739,6 +1777,8 @@ function summarizeRecords(records, sourceError = "") {
   return {
     updatedAtIso: new Date().toISOString(),
     nextRefreshAtIso: new Date(Date.now() + recordsRefreshMs).toISOString(),
+    provider,
+    providers: [gptProvider, deepSeekProvider].map(providerPublicInfo),
     total,
     recordCount: normalized.length,
     outcomeHits,
@@ -1749,29 +1789,31 @@ function summarizeRecords(records, sourceError = "") {
   };
 }
 
-async function buildRecords() {
+async function buildRecords(provider = "") {
   let savedPredictions = new Map();
   try {
     savedPredictions = await readSavedPredictions();
     const records = await fetchCompletedScoreboardRecords(savedPredictions);
-    const result = summarizeRecords(mergeCompletedRecords(records, fallbackRecords, savedPredictions));
-    await writeJsonFile(recordsCachePath, result);
+    const result = summarizeRecords(mergeCompletedRecords(records, fallbackRecords, savedPredictions, provider), "", provider);
+    if (!provider) await writeJsonFile(recordsCachePath, result);
     return result;
   } catch (error) {
     const cached = await readJsonFile(recordsCachePath, null);
-    if (cached?.records?.length) {
+    if (!provider && cached?.records?.length) {
       return {
         ...cached,
         nextRefreshAtIso: new Date(Date.now() + recordsRefreshMs).toISOString(),
         sourceError: error.message,
       };
     }
-    return summarizeRecords(mergeCompletedRecords([], fallbackRecords, savedPredictions), error.message);
+    return summarizeRecords(mergeCompletedRecords([], fallbackRecords, savedPredictions, provider), error.message, provider);
   }
 }
 
 async function records(req, res) {
-  sendJson(res, 200, await buildRecords());
+  const routeUrl = new URL(req.url, `http://${req.headers.host}`);
+  const provider = String(routeUrl.searchParams.get("provider") || "").trim().toLowerCase();
+  sendJson(res, 200, await buildRecords(provider));
 }
 
 function teamArticles(team, items) {
