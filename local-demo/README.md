@@ -29,6 +29,20 @@ OPENAI_BASE_URL
 OPENAI_MODEL
 ```
 
+Optional dual prediction providers:
+
+```text
+GPT_OPENAI_API_KEY
+GPT_OPENAI_BASE_URL=https://api.openai.com/v1
+GPT_OPENAI_MODEL=gpt-5.5
+
+DEEPSEEK_OPENAI_API_KEY
+DEEPSEEK_OPENAI_BASE_URL=https://api.deepseek.com/v1
+DEEPSEEK_OPENAI_MODEL=deepseek-chat
+```
+
+When both GPT and DeepSeek are configured, every `/api/predict` request calls both providers and returns `modelResults` for side-by-side display. The legacy `OPENAI_*` settings are still supported and are treated as GPT unless the base URL contains `deepseek`.
+
 Retained fable provider settings:
 
 ```text

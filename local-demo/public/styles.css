@@ -1245,6 +1245,72 @@ button.secondary:hover {
   border-bottom: 1px solid #dce8e0;
 }
 
+.model-comparison {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  margin: 14px 0 16px;
+}
+
+.model-card {
+  display: grid;
+  gap: 12px;
+  padding: 14px;
+  border: 1px solid #dce8e0;
+  border-radius: 8px;
+  background: #f7fbf8;
+}
+
+.model-card-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  align-items: center;
+}
+
+.model-card-head strong {
+  color: #10291b;
+  font-size: 14px;
+}
+
+.model-card-head span {
+  flex: 0 0 auto;
+  padding: 4px 8px;
+  border-radius: 999px;
+  background: #e7f4ed;
+  color: #12693e;
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.model-card-body {
+  display: grid;
+  gap: 8px;
+}
+
+.model-card-body b {
+  color: #12693e;
+  font-size: 30px;
+  line-height: 1;
+}
+
+.model-card-body small,
+.model-card-body p {
+  margin: 0;
+  color: #53625a;
+  line-height: 1.55;
+}
+
+.model-card.is-error {
+  border-color: #f0d38a;
+  background: #fff9e8;
+}
+
+.model-card.is-error .model-card-head span {
+  background: #fff1bf;
+  color: #9a6a00;
+}
+
 .factors {
   display: flex;
   flex-wrap: wrap;
@@ -1775,6 +1841,10 @@ pre {
     grid-template-columns: 1fr 1fr;
     margin: 12px 0;
     padding: 10px 0;
+  }
+
+  .model-comparison {
+    grid-template-columns: 1fr;
   }
 
   .schedule-row,
@@ -2510,6 +2580,39 @@ body {
 
 .result-console .result-meta {
   border-color: rgba(255, 255, 255, 0.1);
+}
+
+.result-console .model-card {
+  border-color: rgba(105, 238, 157, 0.18);
+  background: #0d2017;
+}
+
+.result-console .model-card-head strong {
+  color: white;
+}
+
+.result-console .model-card-head span {
+  background: rgba(56, 246, 126, 0.12);
+  color: var(--broadcast-lime);
+}
+
+.result-console .model-card-body b {
+  color: var(--broadcast-gold);
+}
+
+.result-console .model-card-body small,
+.result-console .model-card-body p {
+  color: #9fb3a8;
+}
+
+.result-console .model-card.is-error {
+  border-color: rgba(240, 200, 90, 0.32);
+  background: rgba(240, 200, 90, 0.08);
+}
+
+.result-console .model-card.is-error .model-card-head span {
+  background: rgba(240, 200, 90, 0.14);
+  color: var(--broadcast-gold);
 }
 
 .result-console .player-card {

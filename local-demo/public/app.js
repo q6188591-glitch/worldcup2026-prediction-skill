@@ -793,6 +793,59 @@ function connectLiveEvents() {
   });
 }
 
+function providerBadgeText(item) {
+  const label = item.providerLabel || item.provider || "AI";
+  const model = item.model ? ` · ${item.model}` : "";
+  return `${label}${model}`;
+}
+
+function renderModelComparison(data) {
+  const container = document.querySelector("#modelComparison");
+  if (!container) return;
+  const results = Array.isArray(data.modelResults) && data.modelResults.length
+    ? data.modelResults
+    : [{
+      ok: true,
+      provider: data.provider?.id || "primary",
+      providerLabel: data.provider?.label || "当前模型",
+      model: data.provider?.model || data.model || "",
+      result: data,
+    }];
+
+  container.innerHTML = "";
+  for (const item of results) {
+    const card = document.createElement("article");
+    card.className = `model-card ${item.ok ? "is-ready" : "is-error"}`;
+
+    const head = document.createElement("div");
+    head.className = "model-card-head";
+    const title = document.createElement("strong");
+    title.textContent = providerBadgeText(item);
+    const state = document.createElement("span");
+    state.textContent = item.ok ? "已返回" : "未返回";
+    head.append(title, state);
+
+    const body = document.createElement("div");
+    body.className = "model-card-body";
+    if (item.ok && item.result) {
+      const score = document.createElement("b");
+      score.textContent = item.result.predictedScore || "--";
+      const confidence = document.createElement("small");
+      confidence.textContent = `置信度 ${item.result.confidence || "--"}`;
+      const analysis = document.createElement("p");
+      analysis.textContent = item.result.analysis || "暂无分析摘要";
+      body.append(score, confidence, analysis);
+    } else {
+      const error = document.createElement("p");
+      error.textContent = item.error || "模型暂未配置或调用失败";
+      body.append(error);
+    }
+
+    card.append(head, body);
+    container.append(card);
+  }
+}
+
 function renderPrediction(data) {
   hasPrediction = true;
   setText("#teamAName", data.teamA?.name ?? "--");
@@ -804,6 +857,7 @@ function renderPrediction(data) {
   setText("#confidence", data.confidence ?? "--");
   setText("#analysis", data.analysis ?? "");
   document.querySelector("#rawJson").textContent = JSON.stringify(data, null, 2);
+  renderModelComparison(data);
 
   const factors = document.querySelector("#factors");
   factors.innerHTML = "";

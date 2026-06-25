@@ -45,6 +45,24 @@ const primaryProvider = {
   apiKey: process.env.PRIMARY_OPENAI_API_KEY || process.env.OPENAI_API_KEY || "",
   model: process.env.PRIMARY_OPENAI_MODEL || process.env.OPENAI_MODEL || "gpt-5.5",
 };
+const openAiBaseFromEnv = (process.env.OPENAI_BASE_URL || "").replace(/\/$/, "");
+const openAiLooksLikeDeepSeek = /deepseek/i.test(openAiBaseFromEnv);
+const gptProvider = {
+  id: "gpt",
+  name: "gpt",
+  label: "GPT",
+  apiBase: (process.env.GPT_OPENAI_BASE_URL || (!openAiLooksLikeDeepSeek && openAiBaseFromEnv) || "https://api.openai.com/v1").replace(/\/$/, ""),
+  apiKey: process.env.GPT_OPENAI_API_KEY || (!openAiLooksLikeDeepSeek ? process.env.OPENAI_API_KEY : "") || "",
+  model: process.env.GPT_OPENAI_MODEL || (!openAiLooksLikeDeepSeek ? process.env.OPENAI_MODEL : "") || "gpt-5.5",
+};
+const deepSeekProvider = {
+  id: "deepseek",
+  name: "deepseek",
+  label: "DeepSeek",
+  apiBase: (process.env.DEEPSEEK_OPENAI_BASE_URL || (openAiLooksLikeDeepSeek && openAiBaseFromEnv) || "https://api.deepseek.com/v1").replace(/\/$/, ""),
+  apiKey: process.env.DEEPSEEK_OPENAI_API_KEY || process.env.DEEPSEEK_API_KEY || (openAiLooksLikeDeepSeek ? process.env.OPENAI_API_KEY : "") || "",
+  model: process.env.DEEPSEEK_OPENAI_MODEL || (openAiLooksLikeDeepSeek ? process.env.OPENAI_MODEL : "") || "deepseek-chat",
+};
 const fableProvider = {
   name: "fable",
   apiBase: (process.env.FABLE_OPENAI_BASE_URL || "").replace(/\/$/, ""),
@@ -114,6 +132,7 @@ function publicConfig() {
   return {
     model: primaryProvider.model,
     hasApiKey: Boolean(primaryProvider.apiKey),
+    providers: [gptProvider, deepSeekProvider].map(providerPublicInfo),
     fableFreeUses: 0,
     fableEnabled: false,
     providerNotice: "当前使用服务端配置模型；预测会自动注入实时情报。",
@@ -232,6 +251,49 @@ function fableUses(req) {
 
 function providerForRequest() {
   return { provider: primaryProvider, used: 0, shouldIncrementFable: false };
+}
+
+function providerPublicInfo(provider) {
+  return {
+    id: provider.id || provider.name,
+    label: provider.label || provider.name,
+    model: provider.model,
+    configured: Boolean(provider.apiKey),
+  };
+}
+
+function configuredPredictionProviders() {
+  const providers = [gptProvider, deepSeekProvider].filter((provider) => provider.apiKey && provider.apiBase && provider.model);
+  if (providers.length) return providers;
+  return primaryProvider.apiKey ? [{ ...primaryProvider, id: "primary", label: "当前模型" }] : [];
+}
+
+function predictionUserMessage({ stage, teamA, teamB }) {
+  return `请预测这场 2026 世界杯比赛「${stage}」：${teamA} vs ${teamB}。严格按约束文档的 JSON 格式输出。`;
+}
+
+async function callPredictionProvider(provider, systemPrompt, payload) {
+  const content = await callChat({
+    apiBase: provider.apiBase,
+    apiKey: provider.apiKey,
+    model: provider.model,
+    responseFormat: { type: "json_object" },
+    messages: [
+      { role: "system", content: systemPrompt },
+      { role: "user", content: predictionUserMessage(payload) },
+    ],
+  });
+  return JSON.parse(content);
+}
+
+function modelResultPayload(provider, result) {
+  return {
+    ok: true,
+    provider: provider.id || provider.name,
+    providerLabel: provider.label || provider.name,
+    model: provider.model,
+    result,
+  };
 }
 
 function fableCookieHeaders(nextUsed) {
@@ -610,13 +672,14 @@ function memoryForPrompt(memory, teamA, teamB) {
 
 async function listModels(req, res) {
   if (!requireAdmin(req, res)) return;
-  if (!primaryProvider.apiKey) {
+  const provider = configuredPredictionProviders()[0] || primaryProvider;
+  if (!provider.apiKey) {
     sendJson(res, 400, { error: "Missing API key" });
     return;
   }
 
-  const upstream = await fetch(`${primaryProvider.apiBase}/models`, {
-    headers: { authorization: `Bearer ${primaryProvider.apiKey}` },
+  const upstream = await fetch(`${provider.apiBase}/models`, {
+    headers: { authorization: `Bearer ${provider.apiKey}` },
   });
   const raw = await upstream.text();
   if (!upstream.ok) {
@@ -1155,6 +1218,76 @@ async function predict(req, res) {
       sendJson(res, 502, { error: "Model did not return valid JSON", content: error.message });
     }
   }
+}
+
+async function predictWithComparison(req, res) {
+  const account = await requireUser(req, res);
+  if (!account) return;
+  if (!hasPredictQuota(account)) {
+    sendJson(res, 402, { error: "预测次数已用完，请充值次数包后继续预测", code: "PAYMENT_REQUIRED", user: publicUser(account) });
+    return;
+  }
+
+  const payload = await readJson(req);
+  const { teamA, teamB, stage = "小组赛" } = payload;
+  if (!teamA || !teamB) {
+    sendJson(res, 422, { error: "teamA and teamB are required" });
+    return;
+  }
+
+  const providers = configuredPredictionProviders();
+  if (!providers.length) {
+    sendJson(res, 500, {
+      error: "预测服务未配置",
+      hint: "请在 local-demo/.env.local 中设置 GPT_OPENAI_API_KEY 或 DEEPSEEK_OPENAI_API_KEY。",
+    });
+    return;
+  }
+
+  const [skill, liveContext, memory] = await Promise.all([
+    readFile(path.join(repoRoot, "skill.md"), "utf8"),
+    buildLiveContext(),
+    readTeamMemory(),
+  ]);
+  const systemPrompt = `${skill}${liveContextForPrompt(liveContext)}${memoryForPrompt(memory, teamA, teamB)}`;
+  const settled = await Promise.allSettled(
+    providers.map((provider) => callPredictionProvider(provider, systemPrompt, { ...payload, stage, teamA, teamB })),
+  );
+  const modelResults = settled.map((item, index) => {
+    const provider = providers[index];
+    if (item.status === "fulfilled") return modelResultPayload(provider, item.value);
+    return {
+      ok: false,
+      provider: provider.id || provider.name,
+      providerLabel: provider.label || provider.name,
+      model: provider.model,
+      error: item.reason?.detail || item.reason?.message || "Model request failed",
+    };
+  });
+  const successful = modelResults.find((item) => item.ok && item.result?.predictedScore);
+
+  if (!successful) {
+    sendJson(res, 502, {
+      error: "Model did not return valid prediction",
+      modelResults,
+    });
+    return;
+  }
+
+  const result = successful.result;
+  await savePredictionSnapshot(payload, result);
+  await saveUserPrediction(account, payload, result);
+  const updatedUser = await consumePredictionQuota(account.id);
+  sendJson(res, 200, {
+    ...result,
+    provider: {
+      id: successful.provider,
+      label: successful.providerLabel,
+      model: successful.model,
+    },
+    modelResults,
+    user: publicUser(updatedUser || account),
+  });
 }
 
 function decodeXml(text) {
@@ -1966,7 +2099,7 @@ createServer(async (req, res) => {
       return;
     }
     if (req.method === "POST" && route === "/api/predict") {
-      await predict(req, res);
+      await predictWithComparison(req, res);
       return;
     }
     if (req.method === "POST" && route === "/api/brief/preview") {
