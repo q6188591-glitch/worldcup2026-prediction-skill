@@ -108,7 +108,7 @@ let knownOrderStatuses = null;
 let supportContact = "请联系网站管理员";
 let featuredMatch = null;
 let activeBatchProvider = "gpt";
-let activeRecordProvider = "gpt";
+let activeRecordProvider = "";
 let batchResultCache = new Map();
 
 function apiPath(path) {
@@ -631,7 +631,7 @@ function renderRecords(data) {
   const scoreHits = data?.scoreHits ?? records.filter((item) => item.scoreHit).length;
   const marginHits = data?.marginHits ?? records.filter((item) => item.marginHit).length;
   const currentProvider = data?.provider || activeRecordProvider;
-  const currentProviderLabel = currentProvider === "deepseek" ? "DeepSeek" : currentProvider === "gpt" ? "GPT" : "全部模型";
+  const currentProviderLabel = currentProvider === "deepseek" ? "DeepSeek" : currentProvider === "gpt" ? "GPT" : "历史";
   heroRecordCount.textContent = `${records.length} 场已复盘`;
   heroRecordRate.textContent = total ? `${currentProviderLabel} 赛果方向命中 ${percent(outcomeHits, total)}` : `${currentProviderLabel} 等待可统计预测`;
 
@@ -656,6 +656,10 @@ function renderRecords(data) {
   recordStats.querySelector("span").textContent = `${currentProviderLabel} · ${formatTime(data?.updatedAtIso)}`;
 
   recordList.innerHTML = "";
+  if (!records.length) {
+    recordList.innerHTML = `<div class="record-empty">暂无 ${currentProviderLabel} 可统计记录</div>`;
+    return;
+  }
   for (const item of records) {
     const row = document.createElement("div");
     const isUntracked = item.outcomeHit === null || item.scoreHit === null;
@@ -955,6 +959,16 @@ function rerenderBatchResults() {
   }
 }
 
+function batchProviderCounts() {
+  const counts = { gpt: 0, deepseek: 0 };
+  for (const item of batchResultCache.values()) {
+    const results = Array.isArray(item.data?.modelResults) ? item.data.modelResults : [];
+    if (results.some((result) => result.provider === "gpt" && result.ok && result.result?.predictedScore)) counts.gpt += 1;
+    if (results.some((result) => result.provider === "deepseek" && result.ok && result.result?.predictedScore)) counts.deepseek += 1;
+  }
+  return counts;
+}
+
 async function runBatchPrediction() {
   if (isBatchPredicting) return;
   const day = batchDateSelect.value;
@@ -1011,7 +1025,8 @@ async function runBatchPrediction() {
     }
   }
 
-  batchStatus.textContent = `批量预测完成：${okCount}/${matches.length} 场成功，结果已保存。`;
+  const providerCounts = batchProviderCounts();
+  batchStatus.textContent = `批量预测完成：请求 ${okCount}/${matches.length} 场成功；GPT ${providerCounts.gpt}/${matches.length}，DeepSeek ${providerCounts.deepseek}/${matches.length}。`;
   isBatchPredicting = false;
   batchPredictButton.disabled = false;
   batchDateSelect.disabled = false;
@@ -1071,7 +1086,7 @@ for (const button of batchProviderButtons) {
 
 for (const button of recordProviderButtons) {
   button.addEventListener("click", () => {
-    activeRecordProvider = button.dataset.recordProvider || "gpt";
+    activeRecordProvider = button.dataset.recordProvider || "";
     loadRecords();
   });
 }

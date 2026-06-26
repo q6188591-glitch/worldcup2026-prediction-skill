@@ -166,7 +166,10 @@ function normalizeOpenAIBaseUrl(value) {
 
 function providerConnectionError(error, apiBase) {
   const wrapped = new Error("Model connection failed");
-  wrapped.detail = `无法连接模型接口 ${apiBase}：${error?.message || "网络请求失败"}`;
+  const openAiHint = /api\.openai\.com/i.test(apiBase)
+    ? "。服务器当前无法直连 OpenAI，请把 GPT_OPENAI_BASE_URL 配置为服务器可访问的 OpenAI 兼容转发地址"
+    : "";
+  wrapped.detail = `无法连接模型接口 ${apiBase}：${error?.message || "网络请求失败"}${openAiHint}`;
   return wrapped;
 }
 
@@ -1776,11 +1779,9 @@ async function schedule(req, res) {
 function applySavedPrediction(record, savedPredictions, provider = "") {
   const direct = provider
     ? savedPredictions.get(providerPredictionKey(provider, record.teamA, record.teamB))
-      || (provider === "gpt" ? savedPredictions.get(predictionKey(record.teamA, record.teamB)) : null)
     : savedPredictions.get(predictionKey(record.teamA, record.teamB));
   const reverse = provider
     ? savedPredictions.get(providerPredictionKey(provider, record.teamB, record.teamA))
-      || (provider === "gpt" ? savedPredictions.get(predictionKey(record.teamB, record.teamA)) : null)
     : savedPredictions.get(predictionKey(record.teamB, record.teamA));
   if (direct) {
     return {

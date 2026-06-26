@@ -1542,6 +1542,17 @@ pre {
   gap: 10px;
 }
 
+.record-empty {
+  padding: 26px 16px;
+  border: 1px dashed rgba(73, 255, 144, 0.26);
+  border-radius: 8px;
+  background: rgba(4, 24, 14, 0.56);
+  color: #a8c8b4;
+  font-size: 14px;
+  font-weight: 900;
+  text-align: center;
+}
+
 .record-row {
   display: grid;
   grid-template-columns: 1fr 72px 92px 92px max-content max-content max-content;
