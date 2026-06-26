@@ -107,7 +107,7 @@ let payment = {};
 let knownOrderStatuses = null;
 let supportContact = "请联系网站管理员";
 let featuredMatch = null;
-let activeBatchProvider = "gpt";
+let activeBatchProvider = "deepseek";
 let activeRecordProvider = "";
 let batchResultCache = new Map();
 
@@ -959,16 +959,6 @@ function rerenderBatchResults() {
   }
 }
 
-function batchProviderCounts() {
-  const counts = { gpt: 0, deepseek: 0 };
-  for (const item of batchResultCache.values()) {
-    const results = Array.isArray(item.data?.modelResults) ? item.data.modelResults : [];
-    if (results.some((result) => result.provider === "gpt" && result.ok && result.result?.predictedScore)) counts.gpt += 1;
-    if (results.some((result) => result.provider === "deepseek" && result.ok && result.result?.predictedScore)) counts.deepseek += 1;
-  }
-  return counts;
-}
-
 async function runBatchPrediction() {
   if (isBatchPredicting) return;
   const day = batchDateSelect.value;
@@ -1025,8 +1015,7 @@ async function runBatchPrediction() {
     }
   }
 
-  const providerCounts = batchProviderCounts();
-  batchStatus.textContent = `批量预测完成：请求 ${okCount}/${matches.length} 场成功；GPT ${providerCounts.gpt}/${matches.length}，DeepSeek ${providerCounts.deepseek}/${matches.length}。`;
+  batchStatus.textContent = `批量预测完成：${okCount}/${matches.length} 场成功，结果已保存。`;
   isBatchPredicting = false;
   batchPredictButton.disabled = false;
   batchDateSelect.disabled = false;

@@ -66,6 +66,7 @@ const deepSeekProvider = {
   model: process.env.DEEPSEEK_OPENAI_MODEL || (openAiLooksLikeDeepSeek ? process.env.OPENAI_MODEL : "") || "deepseek-chat",
   apiType: process.env.DEEPSEEK_OPENAI_API_TYPE || "chat",
 };
+const enableGptProvider = process.env.ENABLE_GPT_PROVIDER === "true";
 const fableProvider = {
   name: "fable",
   apiBase: normalizeOpenAIBaseUrl(process.env.FABLE_OPENAI_BASE_URL || ""),
@@ -133,9 +134,9 @@ function sendJson(res, status, payload, extraHeaders = {}) {
 
 function publicConfig() {
   return {
-    model: primaryProvider.model,
-    hasApiKey: Boolean(primaryProvider.apiKey),
-    providers: [gptProvider, deepSeekProvider].map(providerPublicInfo),
+    model: deepSeekProvider.model,
+    hasApiKey: Boolean(deepSeekProvider.apiKey || (primaryProvider.apiKey && /deepseek/i.test(primaryProvider.apiBase))),
+    providers: publicPredictionProviders().map(providerPublicInfo),
     fableFreeUses: 0,
     fableEnabled: false,
     providerNotice: "当前使用服务端配置模型；预测会自动注入实时情报。",
@@ -332,10 +333,17 @@ function providerPublicInfo(provider) {
   };
 }
 
+function publicPredictionProviders() {
+  return enableGptProvider ? [gptProvider, deepSeekProvider] : [deepSeekProvider];
+}
+
 function configuredPredictionProviders() {
-  const providers = [gptProvider, deepSeekProvider].filter((provider) => provider.apiKey && provider.apiBase && provider.model);
+  const providers = publicPredictionProviders().filter((provider) => provider.apiKey && provider.apiBase && provider.model);
   if (providers.length) return providers;
-  return primaryProvider.apiKey ? [{ ...primaryProvider, id: "primary", label: "当前模型" }] : [];
+  if (primaryProvider.apiKey && /deepseek/i.test(primaryProvider.apiBase)) {
+    return [{ ...primaryProvider, id: "deepseek", label: "DeepSeek" }];
+  }
+  return [];
 }
 
 function predictionUserMessage({ stage, teamA, teamB }) {
@@ -1849,7 +1857,7 @@ function summarizeRecords(records, sourceError = "", provider = "") {
     updatedAtIso: new Date().toISOString(),
     nextRefreshAtIso: new Date(Date.now() + recordsRefreshMs).toISOString(),
     provider,
-    providers: [gptProvider, deepSeekProvider].map(providerPublicInfo),
+    providers: publicPredictionProviders().map(providerPublicInfo),
     total,
     recordCount: normalized.length,
     outcomeHits,
