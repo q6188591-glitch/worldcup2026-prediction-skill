@@ -39,33 +39,36 @@ await loadLocalEnv();
 
 const port = Number(process.env.PORT || 5176);
 const host = process.env.HOST || "0.0.0.0";
+const openAiBaseFromEnv = normalizeOpenAIBaseUrl(process.env.OPENAI_BASE_URL || "");
+const openAiLooksLikeDeepSeek = /deepseek/i.test(openAiBaseFromEnv);
+const gptModel = process.env.GPT_OPENAI_MODEL || (!openAiLooksLikeDeepSeek ? process.env.OPENAI_MODEL : "") || "gpt-5.5";
 const primaryProvider = {
   name: "primary",
-  apiBase: (process.env.PRIMARY_OPENAI_BASE_URL || process.env.OPENAI_BASE_URL || "https://api.deepseek.com/v1").replace(/\/$/, ""),
+  apiBase: normalizeOpenAIBaseUrl(process.env.PRIMARY_OPENAI_BASE_URL || process.env.OPENAI_BASE_URL || "https://api.deepseek.com/v1"),
   apiKey: process.env.PRIMARY_OPENAI_API_KEY || process.env.OPENAI_API_KEY || "",
   model: process.env.PRIMARY_OPENAI_MODEL || process.env.OPENAI_MODEL || "gpt-5.5",
 };
-const openAiBaseFromEnv = (process.env.OPENAI_BASE_URL || "").replace(/\/$/, "");
-const openAiLooksLikeDeepSeek = /deepseek/i.test(openAiBaseFromEnv);
 const gptProvider = {
   id: "gpt",
   name: "gpt",
   label: "GPT",
-  apiBase: (process.env.GPT_OPENAI_BASE_URL || (!openAiLooksLikeDeepSeek && openAiBaseFromEnv) || "https://api.openai.com/v1").replace(/\/$/, ""),
+  apiBase: normalizeOpenAIBaseUrl(process.env.GPT_OPENAI_BASE_URL || (!openAiLooksLikeDeepSeek && openAiBaseFromEnv) || "https://api.openai.com/v1"),
   apiKey: process.env.GPT_OPENAI_API_KEY || (!openAiLooksLikeDeepSeek ? process.env.OPENAI_API_KEY : "") || "",
-  model: process.env.GPT_OPENAI_MODEL || (!openAiLooksLikeDeepSeek ? process.env.OPENAI_MODEL : "") || "gpt-5.5",
+  model: gptModel,
+  apiType: process.env.GPT_OPENAI_API_TYPE || (/^gpt-5/i.test(gptModel) ? "responses" : "chat"),
 };
 const deepSeekProvider = {
   id: "deepseek",
   name: "deepseek",
   label: "DeepSeek",
-  apiBase: (process.env.DEEPSEEK_OPENAI_BASE_URL || (openAiLooksLikeDeepSeek && openAiBaseFromEnv) || "https://api.deepseek.com/v1").replace(/\/$/, ""),
+  apiBase: normalizeOpenAIBaseUrl(process.env.DEEPSEEK_OPENAI_BASE_URL || (openAiLooksLikeDeepSeek && openAiBaseFromEnv) || "https://api.deepseek.com/v1"),
   apiKey: process.env.DEEPSEEK_OPENAI_API_KEY || process.env.DEEPSEEK_API_KEY || (openAiLooksLikeDeepSeek ? process.env.OPENAI_API_KEY : "") || "",
   model: process.env.DEEPSEEK_OPENAI_MODEL || (openAiLooksLikeDeepSeek ? process.env.OPENAI_MODEL : "") || "deepseek-chat",
+  apiType: process.env.DEEPSEEK_OPENAI_API_TYPE || "chat",
 };
 const fableProvider = {
   name: "fable",
-  apiBase: (process.env.FABLE_OPENAI_BASE_URL || "").replace(/\/$/, ""),
+  apiBase: normalizeOpenAIBaseUrl(process.env.FABLE_OPENAI_BASE_URL || ""),
   apiKey: process.env.FABLE_OPENAI_API_KEY || "",
   model: process.env.FABLE_OPENAI_MODEL || "fable5.0",
 };
@@ -154,6 +157,19 @@ function requireAdmin(req, res) {
   return true;
 }
 
+function normalizeOpenAIBaseUrl(value) {
+  const raw = String(value || "").trim().replace(/\/+$/, "");
+  if (!raw) return "";
+  if (/^https:\/\/api\.(openai|deepseek)\.com$/i.test(raw)) return `${raw}/v1`;
+  return raw;
+}
+
+function providerConnectionError(error, apiBase) {
+  const wrapped = new Error("Model connection failed");
+  wrapped.detail = `无法连接模型接口 ${apiBase}：${error?.message || "网络请求失败"}`;
+  return wrapped;
+}
+
 async function callChat({ apiBase, apiKey, model, messages, responseFormat }) {
   const body = {
     model,
@@ -164,14 +180,18 @@ async function callChat({ apiBase, apiKey, model, messages, responseFormat }) {
   let upstream;
   let raw = "";
   for (let attempt = 0; attempt < 3; attempt += 1) {
-    upstream = await fetch(`${apiBase}/chat/completions`, {
-      method: "POST",
-      headers: {
-        "content-type": "application/json",
-        authorization: `Bearer ${apiKey}`,
-      },
-      body: JSON.stringify(body),
-    });
+    try {
+      upstream = await fetch(`${apiBase}/chat/completions`, {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          authorization: `Bearer ${apiKey}`,
+        },
+        body: JSON.stringify(body),
+      });
+    } catch (error) {
+      throw providerConnectionError(error, apiBase);
+    }
     raw = await upstream.text();
     if (![502, 503, 504].includes(upstream.status)) break;
     await new Promise((resolve) => setTimeout(resolve, 800 * (attempt + 1)));
@@ -184,6 +204,53 @@ async function callChat({ apiBase, apiKey, model, messages, responseFormat }) {
     throw error;
   }
   return JSON.parse(raw).choices?.[0]?.message?.content;
+}
+
+function responsesText(data) {
+  if (typeof data?.output_text === "string") return data.output_text;
+  const chunks = [];
+  for (const output of data?.output || []) {
+    for (const content of output.content || []) {
+      if (typeof content.text === "string") chunks.push(content.text);
+    }
+  }
+  return chunks.join("\n");
+}
+
+async function callResponses({ apiBase, apiKey, model, messages, responseFormat }) {
+  const body = {
+    model,
+    input: messages,
+  };
+  if (responseFormat) body.text = { format: responseFormat };
+
+  let upstream;
+  let raw = "";
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    try {
+      upstream = await fetch(`${apiBase}/responses`, {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          authorization: `Bearer ${apiKey}`,
+        },
+        body: JSON.stringify(body),
+      });
+    } catch (error) {
+      throw providerConnectionError(error, apiBase);
+    }
+    raw = await upstream.text();
+    if (![502, 503, 504].includes(upstream.status)) break;
+    await new Promise((resolve) => setTimeout(resolve, 800 * (attempt + 1)));
+  }
+
+  if (!upstream.ok) {
+    const error = new Error("Model request failed");
+    error.status = upstream.status;
+    error.detail = safeProviderError(upstream.status, raw);
+    throw error;
+  }
+  return responsesText(JSON.parse(raw));
 }
 
 function safeProviderError(status, raw) {
@@ -273,7 +340,8 @@ function predictionUserMessage({ stage, teamA, teamB }) {
 }
 
 async function callPredictionProvider(provider, systemPrompt, payload) {
-  const content = await callChat({
+  const callModel = provider.apiType === "responses" ? callResponses : callChat;
+  const content = await callModel({
     apiBase: provider.apiBase,
     apiKey: provider.apiKey,
     model: provider.model,
@@ -1708,9 +1776,11 @@ async function schedule(req, res) {
 function applySavedPrediction(record, savedPredictions, provider = "") {
   const direct = provider
     ? savedPredictions.get(providerPredictionKey(provider, record.teamA, record.teamB))
+      || (provider === "gpt" ? savedPredictions.get(predictionKey(record.teamA, record.teamB)) : null)
     : savedPredictions.get(predictionKey(record.teamA, record.teamB));
   const reverse = provider
     ? savedPredictions.get(providerPredictionKey(provider, record.teamB, record.teamA))
+      || (provider === "gpt" ? savedPredictions.get(predictionKey(record.teamB, record.teamA)) : null)
     : savedPredictions.get(predictionKey(record.teamB, record.teamA));
   if (direct) {
     return {
