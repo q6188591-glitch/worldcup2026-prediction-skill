@@ -77,7 +77,6 @@ const batchPredictButton = document.querySelector("#batchPredict");
 const batchStatus = document.querySelector("#batchStatus");
 const batchResults = document.querySelector("#batchResults");
 const batchProviderButtons = [...document.querySelectorAll("[data-batch-provider]")];
-const recordProviderButtons = [...document.querySelectorAll("[data-record-provider]")];
 const memoryTeamSelect = document.querySelector("#memoryTeam");
 const refreshMemoryButton = document.querySelector("#refreshMemory");
 const memoryStatus = document.querySelector("#memoryStatus");
@@ -108,7 +107,6 @@ let knownOrderStatuses = null;
 let supportContact = "请联系网站管理员";
 let featuredMatch = null;
 let activeBatchProvider = "deepseek";
-let activeRecordProvider = "";
 let batchResultCache = new Map();
 
 function apiPath(path) {
@@ -630,8 +628,7 @@ function renderRecords(data) {
   const outcomeHits = data?.outcomeHits ?? records.filter((item) => item.outcomeHit).length;
   const scoreHits = data?.scoreHits ?? records.filter((item) => item.scoreHit).length;
   const marginHits = data?.marginHits ?? records.filter((item) => item.marginHit).length;
-  const currentProvider = data?.provider || activeRecordProvider;
-  const currentProviderLabel = currentProvider === "deepseek" ? "DeepSeek" : currentProvider === "gpt" ? "GPT" : "历史";
+  const currentProviderLabel = "历史";
   heroRecordCount.textContent = `${records.length} 场已复盘`;
   heroRecordRate.textContent = total ? `${currentProviderLabel} 赛果方向命中 ${percent(outcomeHits, total)}` : `${currentProviderLabel} 等待可统计预测`;
 
@@ -738,9 +735,8 @@ async function loadLiveContext({ force = false } = {}) {
 }
 
 async function loadRecords() {
-  setProviderButtons(recordProviderButtons, activeRecordProvider);
   try {
-    const res = await fetch(`${apiPath("records")}?provider=${encodeURIComponent(activeRecordProvider)}`, { cache: "no-store" });
+    const res = await fetch(apiPath("records"), { cache: "no-store" });
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || "命中记录刷新失败");
     renderRecords(data);
@@ -1073,13 +1069,6 @@ for (const button of batchProviderButtons) {
   });
 }
 
-for (const button of recordProviderButtons) {
-  button.addEventListener("click", () => {
-    activeRecordProvider = button.dataset.recordProvider || "";
-    loadRecords();
-  });
-}
-
 loginButton.addEventListener("click", () => submitAuth("login").catch((error) => { setAuthHint(error.message); }));
 registerButton.addEventListener("click", () => submitAuth("register").catch((error) => { setAuthHint(error.message); }));
 contactAdminButton.addEventListener("click", () => contactAdminDialog.showModal());
@@ -1171,7 +1160,6 @@ for (const link of mobileDockLinks) {
 }
 updateActiveDock();
 setProviderButtons(batchProviderButtons, activeBatchProvider);
-setProviderButtons(recordProviderButtons, activeRecordProvider);
 
 loadAuth().catch((error) => {
   accountMeta.textContent = error.message;
